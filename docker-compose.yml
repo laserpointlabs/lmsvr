@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    restart: unless-stopped
+    networks:
+      - lmsvr_network
+
+  api_gateway:
+    build:
+      context: ./api_gateway
+      dockerfile: Dockerfile
+    container_name: api_gateway
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./api_gateway:/app
+    environment:
+      - DATABASE_URL=sqlite:///app/data/lmsvr.db
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - LOG_LEVEL=INFO
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - lmsvr_network
+
+volumes:
+  ollama_data:
+
+networks:
+  lmsvr_network:
+    driver: bridge
+

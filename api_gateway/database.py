@@ -1,0 +1,113 @@
+"""
+Database setup and configuration for SQLite database.
+"""
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from datetime import datetime
+import os
+
+Base = declarative_base()
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    active = Column(Boolean, default=True)
+    monthly_budget = Column(Float, nullable=True)
+    
+    api_keys = relationship("APIKey", back_populates="customer", cascade="all, delete-orphan")
+    usage_logs = relationship("UsageLog", back_populates="customer")
+
+
+class APIKey(Base):
+    __tablename__ = "api_keys"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    key_hash = Column(String, unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+    active = Column(Boolean, default=True)
+    
+    customer = relationship("Customer", back_populates="api_keys")
+    usage_logs = relationship("UsageLog", back_populates="api_key")
+
+
+class UsageLog(Base):
+    __tablename__ = "usage_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    api_key_id = Column(Integer, ForeignKey("api_keys.id"), nullable=False)
+    endpoint = Column(String, nullable=False)
+    model = Column(String, nullable=True)
+    request_count = Column(Integer, default=1)
+    cost = Column(Float, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    metadata = Column(Text, nullable=True)  # JSON string for additional data
+    
+    customer = relationship("Customer", back_populates="usage_logs")
+    api_key = relationship("APIKey", back_populates="usage_logs")
+
+
+class PricingConfig(Base):
+    __tablename__ = "pricing_config"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    model_name = Column(String, nullable=False, unique=True, index=True)
+    per_request_cost = Column(Float, default=0.0)
+    per_model_cost = Column(Float, default=0.0)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ModelMetadata(Base):
+    __tablename__ = "model_metadata"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    model_name = Column(String, unique=True, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    context_window = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# Database setup
+def get_database_url():
+    """Get database URL from environment or use default."""
+    return os.getenv("DATABASE_URL", "sqlite:///./data/lmsvr.db")
+
+
+# Create engine
+database_url = get_database_url()
+
+# Ensure data directory exists for SQLite
+if database_url.startswith("sqlite"):
+    db_path = database_url.replace("sqlite:///", "")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+engine = create_engine(
+    database_url,
+    connect_args={"check_same_thread": False} if "sqlite" in database_url else {}
+)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def init_db():
+    """Initialize the database and create all tables."""
+    Base.metadata.create_all(bind=engine)
+
+
+def get_db_session():
+    """Get database session (for FastAPI dependency injection)."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
