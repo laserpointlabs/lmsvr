@@ -2,7 +2,11 @@
 Usage tracking and cost calculation.
 """
 from sqlalchemy.orm import Session
-from database import UsageLog, PricingConfig, Customer
+from sqlalchemy import func
+try:
+    from .database import UsageLog, PricingConfig, Customer
+except ImportError:
+    from database import UsageLog, PricingConfig, Customer
 from datetime import datetime, timedelta
 from typing import Optional
 import logging
@@ -71,13 +75,16 @@ def check_budget(customer_id: int, db: Session, period_days: int = 30) -> tuple[
     if not customer:
         return False, 0.0, None
     
-    # Calculate spending for the period
-    start_date = datetime.utcnow() - timedelta(days=period_days)
+    # Calculate spending for the current month
+    # This assumes a monthly budget resets at the beginning of each calendar month
+    now = datetime.utcnow()
+    start_of_month = datetime(now.year, now.month, 1)
+
     total_spending = db.query(
-        db.func.sum(UsageLog.cost)
+        func.sum(UsageLog.cost)
     ).filter(
         UsageLog.customer_id == customer_id,
-        UsageLog.timestamp >= start_date
+        UsageLog.timestamp >= start_of_month
     ).scalar() or 0.0
     
     # Check against budget

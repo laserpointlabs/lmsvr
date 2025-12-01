@@ -2,6 +2,8 @@
 
 This directory contains configuration for exposing the Ollama API Gateway via Cloudflare Tunnel.
 
+**Important:** The domain/hostname is configured via `CLOUDFLARE_TUNNEL_URL` in your `.env` file. After changing the domain in `.env`, run `./update_config_from_env.sh` to sync the config file.
+
 ## Quick Setup (Automated)
 
 ### CLI Setup (Recommended)
@@ -57,13 +59,27 @@ If you prefer to set up manually:
 
 3. **Update config.yml:**
    - Replace `<TUNNEL_ID>` with your actual tunnel ID
-   - Update `hostname` with your domain name
-   - Update the `credentials-file` path if needed
+   - Set `CLOUDFLARE_TUNNEL_URL` in your `.env` file (e.g., `https://lmapi.laserpointlabs.com`)
+   - Run `./update_config_from_env.sh` to sync config.yml from .env
+   - Or manually update `hostname` in config.yml
 
-4. **Create DNS record:**
+4. **Create DNS record via CLI:**
    ```bash
-   cloudflared tunnel route dns ollama-gateway yourdomain.com
+   cloudflared tunnel route dns ollama-gateway lmapi.laserpointlabs.com
    ```
+   
+   **OR manually in Cloudflare Dashboard:**
+   - Go to: Zero Trust → Tunnels → ollama-gateway → Public Hostnames
+   - Click "Add a public hostname"
+   - Subdomain: `lmapi`
+   - Domain: `laserpointlabs.com`
+   - Service: `http://api_gateway:8000`
+   - Save
+   
+   **OR add DNS CNAME record:**
+   - Go to: DNS → Records
+   - Add CNAME: `lmapi` → `7a14aef0-282b-4d81-9e3a-817338eef3df.cfargotunnel.com`
+   - Proxy: Enabled (orange cloud)
 
 5. **Run the tunnel:**
    ```bash
@@ -119,10 +135,64 @@ sudo systemctl enable cloudflared-tunnel  # Auto-start on boot
 sudo systemctl status cloudflared-tunnel   # Check status
 ```
 
+## Configuration Management
+
+### Domain Configuration
+
+The domain is configured via `CLOUDFLARE_TUNNEL_URL` in your `.env` file:
+
+```bash
+CLOUDFLARE_TUNNEL_URL=https://lmapi.laserpointlabs.com
+```
+
+**To change the domain:**
+1. Edit `CLOUDFLARE_TUNNEL_URL` in your `.env` file
+2. Run `./update_config_from_env.sh` to update `config.yml`
+3. Restart the tunnel: `docker compose restart cloudflared`
+4. Update DNS route in Cloudflare dashboard
+
+### Syncing Config from .env
+
+Use the provided script to keep `config.yml` in sync with your `.env` file:
+
+```bash
+./cloudflare/update_config_from_env.sh
+```
+
+This script:
+- Reads `CLOUDFLARE_TUNNEL_URL` from `.env`
+- Updates `config.yml` with the correct hostname
+- Preserves tunnel ID and other settings
+
+## Testing the Tunnel
+
+Once DNS is configured and propagated (2-5 minutes), test the tunnel:
+
+```bash
+# Health check (no authentication)
+curl https://lmapi.laserpointlabs.com/health
+
+# List models (requires API key)
+curl -H "Authorization: Bearer YOUR_API_KEY" https://lmapi.laserpointlabs.com/api/models
+
+# Generate text
+curl -X POST -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2:1b","prompt":"Say hello","stream":false}' \
+  https://lmapi.laserpointlabs.com/api/generate
+```
+
+**Troubleshooting:**
+- If DNS doesn't resolve: Verify DNS record exists in Cloudflare Dashboard
+- If tunnel shows "Healthy" but requests fail: Check Public Hostnames configuration
+- If 502/503 errors: Verify API Gateway is running and accessible from tunnel container
+
 ## Notes
 
-- The tunnel routes traffic from your Cloudflare domain to `localhost:8000` (the API Gateway)
+- The tunnel routes traffic from your Cloudflare domain to `api_gateway:8000` (via Docker network)
 - Make sure the API Gateway is running before starting the tunnel
 - The tunnel provides HTTPS automatically via Cloudflare
-- DNS propagation may take a few minutes after setup
+- DNS propagation may take 2-5 minutes after setup
+- Domain configuration comes from `.env` file, not hardcoded
+- Multiple tunnels can run simultaneously on the same machine (different tunnel IDs)
 

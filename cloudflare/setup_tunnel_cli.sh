@@ -131,6 +131,7 @@ echo ""
 
 # Step 7: Create config file
 echo -e "${YELLOW}Step 7: Creating configuration file...${NC}"
+echo -e "${BLUE}Using domain: $DOMAIN_NAME${NC}"
 cat > "$CONFIG_FILE" <<EOF
 tunnel: $TUNNEL_ID
 credentials-file: /etc/cloudflared/credentials.json
@@ -140,6 +141,18 @@ ingress:
     service: http://api_gateway:8000
   - service: http_status:404
 EOF
+
+# Update .env file if it exists
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    if grep -q "CLOUDFLARE_TUNNEL_URL" "$PROJECT_ROOT/.env"; then
+        sed -i "s|CLOUDFLARE_TUNNEL_URL=.*|CLOUDFLARE_TUNNEL_URL=https://$DOMAIN_NAME|" "$PROJECT_ROOT/.env"
+    else
+        echo "" >> "$PROJECT_ROOT/.env"
+        echo "# Cloudflare Tunnel Configuration" >> "$PROJECT_ROOT/.env"
+        echo "CLOUDFLARE_TUNNEL_URL=https://$DOMAIN_NAME" >> "$PROJECT_ROOT/.env"
+    fi
+    echo -e "${GREEN}✓ Updated .env file with tunnel URL${NC}"
+fi
 
 echo -e "${GREEN}✓ Configuration file created: $CONFIG_FILE${NC}"
 echo ""

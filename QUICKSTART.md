@@ -77,6 +77,36 @@ cd cloudflare
 ./setup_tunnel_cli.sh
 ```
 
+**Domain Configuration:** The domain is configured via `CLOUDFLARE_TUNNEL_URL` in your `.env` file (default: `https://lmapi.laserpointlabs.com`).
+
+To change the domain:
+1. Update `CLOUDFLARE_TUNNEL_URL` in your `.env` file
+2. Run `./cloudflare/update_config_from_env.sh` to update the config file
+3. Restart the tunnel: `docker compose restart cloudflared`
+4. Set up DNS route (see below)
+
+**DNS Setup:**
+After tunnel is created, configure DNS:
+
+**Option 1: Via CLI (recommended)**
+```bash
+cloudflared tunnel route dns ollama-gateway lmapi.laserpointlabs.com
+```
+
+**Option 2: Via Cloudflare Dashboard**
+- Go to: Zero Trust → Tunnels → ollama-gateway → Public Hostnames
+- Add hostname: `lmapi.laserpointlabs.com` → `http://api_gateway:8000`
+
+**Option 3: Manual DNS Record**
+- Go to: DNS → Records
+- Add CNAME: `lmapi` → `7a14aef0-282b-4d81-9e3a-817338eef3df.cfargotunnel.com`
+- Proxy: Enabled
+
+Wait 2-5 minutes for DNS propagation, then test:
+```bash
+curl https://lmapi.laserpointlabs.com/health
+```
+
 ### 8. Verify Installation
 
 ```bash
@@ -96,8 +126,7 @@ curl http://localhost:11434/api/tags
 
 ```bash
 source venv/bin/activate
-python3 cli/cli.py create-customer "Your Name" "your@email.com" --budget 100.0
-```
+can ```
 
 ### Generate API Key
 
@@ -109,9 +138,31 @@ python3 cli/cli.py generate-key 1
 
 ### Pull Models
 
+**Option 1: Auto-pull on startup (Recommended)**
+
+Set `OLLAMA_MODELS` in your `.env` file:
 ```bash
-docker exec -it ollama ollama pull llama3
+OLLAMA_MODELS="llama3.2:1b mistral codellama"
+```
+
+Then restart services:
+```bash
+docker compose restart
+```
+
+Models will be pulled automatically when Ollama starts.
+
+**Option 2: Manual pull**
+
+```bash
+docker exec -it ollama ollama pull llama3.2:1b
 docker exec -it ollama ollama pull mistral
+```
+
+**Option 3: Use pull script**
+
+```bash
+OLLAMA_MODELS="llama3.2:1b mistral" ./scripts/pull_models.sh
 ```
 
 ### Set Pricing
@@ -123,9 +174,34 @@ python3 cli/cli.py set-pricing mistral 0.0015 0.003
 
 ### Test the API
 
+**Via localhost:**
 ```bash
 curl -H "Authorization: Bearer <your_api_key>" \
   http://localhost:8001/api/models
+```
+
+**Via Cloudflare Tunnel (after DNS setup):**
+```bash
+curl -H "Authorization: Bearer <your_api_key>" \
+  https://lmapi.laserpointlabs.com/api/models
+```
+
+**Complete test examples:**
+```bash
+# Health check (no auth)
+curl https://lmapi.laserpointlabs.com/health
+
+# Generate text
+curl -X POST -H "Authorization: Bearer <your_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2:1b","prompt":"Say hello","stream":false}' \
+  https://lmapi.laserpointlabs.com/api/generate
+
+# Chat completion
+curl -X POST -H "Authorization: Bearer <your_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2:1b","messages":[{"role":"user","content":"Hello!"}],"stream":false}' \
+  https://lmapi.laserpointlabs.com/api/chat
 ```
 
 ## Troubleshooting

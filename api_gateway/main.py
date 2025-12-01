@@ -10,23 +10,42 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from database import get_db_session, init_db
-from auth import get_current_customer
-from ollama_client import list_models, chat, generate, check_ollama_health
-from usage import calculate_cost, log_usage, check_budget
-from external_apis import (
-    openai_chat_completions,
-    calculate_openai_cost,
-    claude_messages,
-    calculate_claude_cost
-)
-from models import (
-    ChatRequest,
-    GenerateRequest,
-    OpenAICompletionsRequest,
-    ModelsListResponse,
-    ModelInfo
-)
+try:
+    from .database import get_db_session, init_db, PricingConfig, ModelMetadata, Customer
+    from .auth import get_current_customer
+    from .ollama_client import list_models, chat, generate, check_ollama_health
+    from .usage import calculate_cost, log_usage, check_budget
+    from .external_apis import (
+        openai_chat_completions,
+        calculate_openai_cost,
+        claude_messages,
+        calculate_claude_cost
+    )
+    from .models import (
+        ChatRequest,
+        GenerateRequest,
+        OpenAICompletionsRequest,
+        ModelsListResponse,
+        ModelInfo
+    )
+except ImportError:
+    from database import get_db_session, init_db, PricingConfig, ModelMetadata, Customer
+    from auth import get_current_customer
+    from ollama_client import list_models, chat, generate, check_ollama_health
+    from usage import calculate_cost, log_usage, check_budget
+    from external_apis import (
+        openai_chat_completions,
+        calculate_openai_cost,
+        claude_messages,
+        calculate_claude_cost
+    )
+    from models import (
+        ChatRequest,
+        GenerateRequest,
+        OpenAICompletionsRequest,
+        ModelsListResponse,
+        ModelInfo
+    )
 
 # Configure logging
 logging.basicConfig(
@@ -218,7 +237,7 @@ async def ollama_chat(
             model=request.model,
             cost=cost,
             db=db,
-            extra_data=json.dumps({"stream": request.stream})
+            metadata=json.dumps({"stream": request.stream})
         )
         
         return response
@@ -266,7 +285,7 @@ async def ollama_generate(
             model=request.model,
             cost=cost,
             db=db,
-            extra_data=json.dumps({"stream": request.stream})
+            metadata=json.dumps({"stream": request.stream})
         )
         
         return response

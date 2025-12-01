@@ -80,16 +80,27 @@ class ModelMetadata(Base):
 # Database setup
 def get_database_url():
     """Get database URL from environment or use default."""
-    return os.getenv("DATABASE_URL", "sqlite:///./data/lmsvr.db")
+    return os.getenv("DATABASE_URL", "sqlite:///./data/lmapi.db")
 
 
 # Create engine
 database_url = get_database_url()
 
-# Ensure data directory exists for SQLite
+# Ensure data directory exists for SQLite with proper permissions
 if database_url.startswith("sqlite"):
-    db_path = database_url.replace("sqlite:///", "")
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    # Handle both sqlite:/// and sqlite://// (absolute paths)
+    db_path = database_url.replace("sqlite:///", "").replace("sqlite:////", "/")
+    # If path doesn't start with /, make it relative to current directory
+    if not db_path.startswith("/"):
+        db_path = os.path.join(os.getcwd(), db_path)
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+        # Set permissions so user can write (777 for directory to allow container user)
+        try:
+            os.chmod(db_dir, 0o777)
+        except (OSError, PermissionError):
+            pass  # Ignore if we can't set permissions
 
 engine = create_engine(
     database_url,
@@ -100,7 +111,35 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
     """Initialize the database and create all tables."""
+    # Ensure data directory exists and is writable before creating tables
+    database_url = get_database_url()
+    if database_url.startswith("sqlite"):
+        # Handle both sqlite:/// and sqlite://// (absolute paths)
+        db_path = database_url.replace("sqlite:///", "").replace("sqlite:////", "/")
+        # If path doesn't start with /, make it relative to current directory
+        if not db_path.startswith("/"):
+            db_path = os.path.join(os.getcwd(), db_path)
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+            try:
+                os.chmod(db_dir, 0o777)  # Allow container user to write
+            except (OSError, PermissionError):
+                pass
+    
     Base.metadata.create_all(bind=engine)
+    
+    # Ensure database file has correct permissions (if SQLite)
+    if database_url.startswith("sqlite"):
+        db_path = database_url.replace("sqlite:///", "").replace("sqlite:////", "/")
+        if not db_path.startswith("/"):
+            db_path = os.path.join(os.getcwd(), db_path)
+        if os.path.exists(db_path):
+            try:
+                # Make database file readable/writable by all (for container user)
+                os.chmod(db_path, 0o666)
+            except (OSError, PermissionError):
+                pass  # Ignore if we can't set permissions
 
 
 def get_db_session():

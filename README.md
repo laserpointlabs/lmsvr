@@ -60,8 +60,10 @@ cp .env.example .env
 ```
 
 Edit `.env` with your configuration:
-- `DATABASE_URL`: SQLite database path (default: `sqlite:///./data/lmsvr.db`)
+- `DATABASE_URL`: SQLite database path (default: `sqlite:///./data/lmapi.db`)
 - `OLLAMA_BASE_URL`: Ollama service URL (default: `http://ollama:11434`)
+
+**Important:** The database is initialized automatically during setup with proper user permissions. Docker containers run as your user (not root) to ensure all files are accessible.
 - `OPENAI_API_KEY`: Optional - for OpenAI pass-through endpoints
 - `ANTHROPIC_API_KEY`: Optional - for Claude pass-through endpoints
 - `LOG_LEVEL`: Logging level (default: `INFO`)
@@ -100,14 +102,9 @@ docker compose up -d
 This will start:
 - Ollama service on port 11434 (with GPU if configured)
 - API Gateway on port 8001 (mapped from container port 8000)
+- Cloudflare Tunnel container (if configured - see Cloudflare Setup section)
 
-**Start with Cloudflare Tunnel:**
-```bash
-docker compose --profile tunnel up -d
-```
-
-This adds:
-- Cloudflare Tunnel container (requires setup first - see step 8)
+**Note:** If Cloudflare tunnel credentials (`cloudflare/credentials.json`) and config (`cloudflare/config.yml`) exist, the tunnel will start automatically with `docker compose up -d`.
 
 ### 4. Pull Models
 
@@ -190,8 +187,13 @@ docker compose logs cloudflared
 docker compose logs cloudflared | grep "Registered tunnel connection"
 
 # Test endpoint (after DNS propagation, usually 2-5 minutes)
-curl https://api.yourdomain.com/health
+curl https://lmapi.laserpointlabs.com/health
 ```
+
+**Note:** The default domain is `lmapi.laserpointlabs.com`. You can change this by:
+1. Updating `cloudflare/config.yml` with your desired hostname
+2. Setting `CLOUDFLARE_TUNNEL_URL` in your `.env` file
+3. Setting up the DNS route via Cloudflare dashboard or CLI
 
 **Important:** 
 - The tunnel container connects to your API Gateway via Docker network (`api_gateway:8000`)
@@ -248,10 +250,13 @@ curl -H "Authorization: Bearer sk_your_api_key_here" \
 ```bash
 # Customer Management
 python cli/cli.py create-customer <name> <email> [--budget]
+python cli/cli.py update-customer <customer_id> [--name NAME] [--email EMAIL] [--budget BUDGET] [--active true|false]
+python cli/cli.py delete-customer <customer_id> [--force]
 python cli/cli.py list-customers
 
 # API Key Management
 python cli/cli.py generate-key <customer_id>
+python cli/cli.py refresh-key <key_id>          # Revoke old key and generate new one
 python cli/cli.py revoke-key <key_id>
 python cli/cli.py list-keys <customer_id>
 
@@ -266,6 +271,10 @@ python cli/cli.py set-pricing <model> <per_request> <per_model>
 # Models
 python cli/cli.py list-models          # List available Ollama models
 python cli/cli.py sync-models          # Sync models to database for metadata
+
+# Help
+python cli/cli.py --help               # Show all available commands
+python cli/cli.py <command> --help     # Show help for specific command
 ```
 
 ## Configuration
@@ -286,6 +295,22 @@ cp .env.example .env
 - `OPENAI_API_KEY` - For OpenAI pass-through endpoints (`/v1/chat/completions`)
 - `ANTHROPIC_API_KEY` - For Claude pass-through endpoints (`/v1/messages`)
 - `LOG_LEVEL` - Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` (default: `INFO`)
+- `CLOUDFLARE_TUNNEL_URL` - Public URL for the API Gateway via Cloudflare Tunnel (default: `https://lmapi.laserpointlabs.com`)
+  
+  **Note:** This value is used to update `cloudflare/config.yml`. After changing it in `.env`, run:
+  ```bash
+  ./cloudflare/update_config_from_env.sh
+  docker compose restart cloudflared
+  ```
+
+- `OLLAMA_MODELS` - Space-separated list of Ollama models to automatically pull on startup (optional)
+  
+  **Example:**
+  ```bash
+  OLLAMA_MODELS="llama3.2:1b mistral codellama"
+  ```
+  
+  **Note:** Models are pulled automatically when Docker Compose starts. If a model already exists, it will be skipped. Leave empty to disable auto-pulling.
 
 **Note:** The `.env` file is gitignored and will not be committed to version control. Each deployment should have its own `.env` file.
 
@@ -299,9 +324,25 @@ The SQLite database is stored in `data/lmsvr.db` and contains:
 
 ## Model Management
 
+### Auto-Pulling Models on Startup
+
+Set `OLLAMA_MODELS` in your `.env` file to automatically pull models when Docker Compose starts:
+
+```bash
+OLLAMA_MODELS="llama3.2:1b mistral codellama"
+```
+
+The `model_puller` service will:
+- Wait for Ollama to be ready
+- Check if models already exist (skips if present)
+- Pull any missing models automatically
+- Exit after completion
+
+**Note:** Model pulling happens in the background. Large models may take several minutes to download.
+
 ### Using Ollama Commands
 
-Models are managed using Ollama's native commands:
+Models can also be managed manually using Ollama's native commands:
 
 ```bash
 # Pull a model
@@ -312,6 +353,18 @@ docker exec -it ollama ollama list
 
 # Remove a model
 docker exec -it ollama ollama rm llama3
+```
+
+### Manual Model Pulling Scripts
+
+You can also use the provided scripts to pull models:
+
+```bash
+# Bash version
+OLLAMA_MODELS="llama3.2:1b mistral" ./scripts/pull_models.sh
+
+# Python version
+OLLAMA_MODELS="llama3.2:1b mistral" python3 scripts/pull_models.py
 ```
 
 ### Using CLI Tools
@@ -392,14 +445,30 @@ Common issues:
 
 Check tunnel container:
 ```bash
-docker compose --profile tunnel logs cloudflared
+docker compose logs cloudflared
 ```
 
 Common issues:
-- Credentials not found: Ensure `cloudflare/credentials/` contains your tunnel JSON file
+- Credentials not found: Ensure `cloudflare/credentials.json` exists
 - Config file incorrect: Verify `cloudflare/config.yml` has correct tunnel ID and service URL
 - API Gateway not running: Tunnel depends on `api_gateway` service
-- DNS not propagated: Wait a few minutes after DNS setup
+- DNS not resolving: Verify DNS record exists in Cloudflare Dashboard
+  - Check: Zero Trust → Tunnels → ollama-gateway → Public Hostnames
+  - Or manually add CNAME: `lmapi` → `7a14aef0-282b-4d81-9e3a-817338eef3df.cfargotunnel.com`
+- DNS not propagated: Wait 2-5 minutes after DNS setup
+
+### Testing Cloudflare Tunnel
+
+Once DNS is configured, test endpoints:
+```bash
+# Health check
+curl https://lmapi.laserpointlabs.com/health
+
+# List models (replace YOUR_API_KEY)
+curl -H "Authorization: Bearer YOUR_API_KEY" https://lmapi.laserpointlabs.com/api/models
+```
+
+See [Testing](#testing) section for complete curl commands.
 
 ### Database errors
 
@@ -410,8 +479,8 @@ chmod 755 data
 ```
 
 Check that `DATABASE_URL` in `.env` points to a valid path:
-- Docker: `sqlite:///app/data/lmsvr.db` (path inside container)
-- Local CLI: `sqlite:///./data/lmsvr.db` (relative to project root)
+- Docker: `sqlite:///app/data/lmapi.db` (path inside container)
+- Local CLI: `sqlite:///./data/lmapi.db` (relative to project root)
 
 ### Environment Variables Not Loading
 
@@ -450,13 +519,66 @@ docker compose logs ollama
 ### CLI Connection Errors
 
 If CLI commands can't connect to the database:
-- Ensure the database file exists: `ls -la data/lmsvr.db`
-- Check file permissions: `chmod 644 data/lmsvr.db`
+- Ensure the database file exists: `ls -la data/lmapi.db`
+- Check file permissions: `chmod 644 data/lmapi.db`
 - Verify `DATABASE_URL` in `.env` matches the CLI's expected path
 
 ## Testing
 
-### Running Tests Locally
+### Testing API Endpoints
+
+**Get an API Key:**
+```bash
+source venv/bin/activate
+python3 cli/cli.py generate-key <customer_id>
+```
+
+**Test via localhost:**
+```bash
+# Health check (no auth)
+curl http://localhost:8001/health
+
+# List models
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8001/api/models
+
+# Generate text
+curl -X POST -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2:1b","prompt":"Say hello","stream":false}' \
+  http://localhost:8001/api/generate
+
+# Chat completion
+curl -X POST -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2:1b","messages":[{"role":"user","content":"Hello!"}],"stream":false}' \
+  http://localhost:8001/api/chat
+```
+
+**Test via Cloudflare Tunnel:**
+```bash
+# Replace lmapi.laserpointlabs.com with your domain
+# Replace YOUR_API_KEY with your actual API key
+
+# Health check
+curl https://lmapi.laserpointlabs.com/health
+
+# List models
+curl -H "Authorization: Bearer YOUR_API_KEY" https://lmapi.laserpointlabs.com/api/models
+
+# Generate text
+curl -X POST -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2:1b","prompt":"Say hello","stream":false}' \
+  https://lmapi.laserpointlabs.com/api/generate
+
+# Chat completion
+curl -X POST -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama3.2:1b","messages":[{"role":"user","content":"Hello!"}],"stream":false}' \
+  https://lmapi.laserpointlabs.com/api/chat
+```
+
+### Running Automated Tests
 
 ```bash
 # Install test dependencies
@@ -534,16 +656,16 @@ See `.github/workflows/ci.yml` for the complete CI configuration.
 
 ### Network
 
-All services run on the `lmsvr_network` Docker network:
+All services run on the `lmapi_network` Docker network (note: docker-compose.yml may still show `lmsvr_network` - both work):
 - Ollama: `http://ollama:11434`
 - API Gateway: `http://api_gateway:8000` (internal), `http://localhost:8001` (external)
 - Cloudflare Tunnel: Connects to `api_gateway:8000` via Docker network
 
 ### Data Storage
 
-- SQLite database: `data/lmsvr.db` (persisted via volume mount)
+- SQLite database: `data/lmapi.db` (persisted via volume mount)
 - Ollama models: `ollama_data` Docker volume
-- Cloudflare credentials: `cloudflare/credentials/` (gitignored)
+- Cloudflare credentials: `cloudflare/credentials.json` (gitignored)
 
 ## Recent Changes
 
@@ -551,9 +673,15 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed change history.
 
 **Latest updates:**
 - GPU support configuration
-- Cloudflare Tunnel container integration
+- Cloudflare Tunnel container integration with automated setup
+- DNS route configuration via CLI
+- Configuration sync from .env file
+- Complete Cloudflare tunnel testing and documentation
 - CI/CD testing improvements
 - GPU testing tools
+- Fixed API key authentication (HTTPBearer)
+- Fixed database name consistency (lmapi.db)
+- Fixed log_usage parameter naming
 
 ## License
 

@@ -111,6 +111,146 @@ def revoke_key(key_id: int):
         db.close()
 
 
+def update_customer(customer_id: int, name: Optional[str] = None, email: Optional[str] = None, 
+                    monthly_budget: Optional[float] = None, active: Optional[bool] = None):
+    """Update a customer's information."""
+    db = get_db_session_sync()
+    try:
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            print(f"Error: Customer with ID {customer_id} not found")
+            return
+        
+        updated = False
+        
+        if name is not None:
+            customer.name = name
+            updated = True
+            print(f"✓ Updated name: {name}")
+        
+        if email is not None:
+            # Check if email already exists for another customer
+            existing = db.query(Customer).filter(
+                Customer.email == email,
+                Customer.id != customer_id
+            ).first()
+            if existing:
+                print(f"Error: Email {email} is already in use by another customer")
+                return
+            customer.email = email
+            updated = True
+            print(f"✓ Updated email: {email}")
+        
+        if monthly_budget is not None:
+            customer.monthly_budget = monthly_budget
+            updated = True
+            print(f"✓ Updated monthly budget: ${monthly_budget:.2f}")
+        
+        if active is not None:
+            customer.active = active
+            updated = True
+            status = "activated" if active else "deactivated"
+            print(f"✓ Customer {status}")
+        
+        if updated:
+            db.commit()
+            print(f"\n✓ Customer updated successfully")
+            print(f"  ID: {customer.id}")
+            print(f"  Name: {customer.name}")
+            print(f"  Email: {customer.email}")
+            if customer.monthly_budget:
+                print(f"  Monthly Budget: ${customer.monthly_budget:.2f}")
+            print(f"  Active: {'Yes' if customer.active else 'No'}")
+        else:
+            print("No changes specified. Use --name, --email, --budget, or --active to update.")
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating customer: {e}")
+    finally:
+        db.close()
+
+
+def delete_customer(customer_id: int, force: bool = False):
+    """Delete a customer and all associated data."""
+    db = get_db_session_sync()
+    try:
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if not customer:
+            print(f"Error: Customer with ID {customer_id} not found")
+            return
+        
+        # Count associated data
+        key_count = db.query(APIKey).filter(APIKey.customer_id == customer_id).count()
+        usage_count = db.query(UsageLog).filter(UsageLog.customer_id == customer_id).count()
+        
+        if not force:
+            print(f"\n⚠️  Warning: This will delete:")
+            print(f"  Customer: {customer.name} (ID: {customer_id})")
+            print(f"  API Keys: {key_count}")
+            print(f"  Usage Logs: {usage_count}")
+            print(f"\nThis action cannot be undone!")
+            response = input("Type 'DELETE' to confirm: ")
+            if response != "DELETE":
+                print("Deletion cancelled")
+                return
+        
+        # Delete customer (cascade will handle API keys)
+        db.delete(customer)
+        db.commit()
+        
+        print(f"✓ Deleted customer {customer.name} (ID: {customer_id})")
+        print(f"  Removed {key_count} API key(s)")
+        print(f"  Removed {usage_count} usage log(s)")
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting customer: {e}")
+    finally:
+        db.close()
+
+
+def refresh_key(key_id: int):
+    """Refresh an API key by revoking the old one and generating a new one."""
+    db = get_db_session_sync()
+    try:
+        old_key = db.query(APIKey).filter(APIKey.id == key_id).first()
+        if not old_key:
+            print(f"Error: API key with ID {key_id} not found")
+            return
+        
+        customer = db.query(Customer).filter(Customer.id == old_key.customer_id).first()
+        if not customer:
+            print(f"Error: Customer not found for API key {key_id}")
+            return
+        
+        # Revoke old key
+        old_key.active = False
+        db.commit()
+        
+        # Generate new key
+        api_key = generate_api_key()
+        key_hash = hash_api_key(api_key)
+        
+        new_key = APIKey(
+            customer_id=customer.id,
+            key_hash=key_hash,
+            active=True
+        )
+        db.add(new_key)
+        db.commit()
+        db.refresh(new_key)
+        
+        print(f"✓ Refreshed API key for {customer.name} (ID: {customer.id})")
+        print(f"  Old Key ID: {key_id} (revoked)")
+        print(f"  New Key ID: {new_key.id}")
+        print(f"  New API Key: {api_key}")
+        print(f"  ⚠️  Save this key securely - it will not be shown again!")
+    except Exception as e:
+        db.rollback()
+        print(f"Error refreshing key: {e}")
+    finally:
+        db.close()
+
+
 def list_customers():
     """List all customers."""
     db = get_db_session_sync()
@@ -410,8 +550,34 @@ def list_models():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Ollama API Gateway Management CLI")
-    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    parser = argparse.ArgumentParser(
+        description="Ollama API Gateway Management CLI",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Create a customer
+  python cli/cli.py create-customer "John Doe" john@example.com --budget 100.00
+  
+  # Update a customer
+  python cli/cli.py update-customer 1 --name "Jane Doe" --budget 200.00
+  
+  # Delete a customer (with confirmation)
+  python cli/cli.py delete-customer 1
+  
+  # Generate an API key
+  python cli/cli.py generate-key 1
+  
+  # Refresh an API key (revoke old, create new)
+  python cli/cli.py refresh-key 5
+  
+  # List all customers
+  python cli/cli.py list-customers
+  
+  # View usage report
+  python cli/cli.py usage-report 1 --start-date 2024-01-01 --end-date 2024-01-31
+        """
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute", metavar="COMMAND")
     
     # Create customer
     parser_create = subparsers.add_parser("create-customer", help="Create a new customer")
@@ -419,9 +585,26 @@ def main():
     parser_create.add_argument("email", help="Customer email")
     parser_create.add_argument("--budget", type=float, help="Monthly budget in dollars")
     
+    # Update customer
+    parser_update = subparsers.add_parser("update-customer", help="Update customer information")
+    parser_update.add_argument("customer_id", type=int, help="Customer ID")
+    parser_update.add_argument("--name", help="New customer name")
+    parser_update.add_argument("--email", help="New customer email")
+    parser_update.add_argument("--budget", type=float, help="New monthly budget in dollars")
+    parser_update.add_argument("--active", type=lambda x: x.lower() == 'true', help="Set active status (true/false)")
+    
+    # Delete customer
+    parser_delete = subparsers.add_parser("delete-customer", help="Delete a customer and all associated data")
+    parser_delete.add_argument("customer_id", type=int, help="Customer ID")
+    parser_delete.add_argument("--force", action="store_true", help="Skip confirmation prompt")
+    
     # Generate key
-    parser_key = subparsers.add_parser("generate-key", help="Generate API key for customer")
+    parser_key = subparsers.add_parser("generate-key", help="Generate a new API key for customer")
     parser_key.add_argument("customer_id", type=int, help="Customer ID")
+    
+    # Refresh key
+    parser_refresh = subparsers.add_parser("refresh-key", help="Refresh an API key (revoke old, create new)")
+    parser_refresh.add_argument("key_id", type=int, help="API Key ID to refresh")
     
     # Revoke key
     parser_revoke = subparsers.add_parser("revoke-key", help="Revoke an API key")
@@ -431,7 +614,7 @@ def main():
     subparsers.add_parser("list-customers", help="List all customers")
     
     # List keys
-    parser_keys = subparsers.add_parser("list-keys", help="List API keys for customer")
+    parser_keys = subparsers.add_parser("list-keys", help="List API keys for a customer")
     parser_keys.add_argument("customer_id", type=int, help="Customer ID")
     
     # Usage report
@@ -471,8 +654,20 @@ def main():
     
     if args.command == "create-customer":
         create_customer(args.name, args.email, args.budget)
+    elif args.command == "update-customer":
+        update_customer(
+            args.customer_id,
+            name=args.name,
+            email=args.email,
+            monthly_budget=args.budget,
+            active=args.active
+        )
+    elif args.command == "delete-customer":
+        delete_customer(args.customer_id, force=args.force)
     elif args.command == "generate-key":
         generate_key(args.customer_id)
+    elif args.command == "refresh-key":
+        refresh_key(args.key_id)
     elif args.command == "revoke-key":
         revoke_key(args.key_id)
     elif args.command == "list-customers":

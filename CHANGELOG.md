@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2025-12-01
+
+### Added
+- Cloudflare Tunnel automated setup script (`cloudflare/setup_tunnel_cli.sh`)
+- Configuration sync script (`cloudflare/update_config_from_env.sh`) to sync config.yml from .env
+- DNS route configuration via CLI (`cloudflared tunnel route dns`)
+- Complete Cloudflare tunnel testing procedures
+- Comprehensive Cloudflare setup documentation (`docs/CLOUDFLARE_SETUP.md`)
+- Multiple tunnels support documentation (running multiple Cloudflare tunnels simultaneously)
+- **Auto-pull Ollama models on startup** - Set `OLLAMA_MODELS` environment variable to automatically pull models when Docker Compose starts
+  - `scripts/pull_models.sh` - Bash script for pulling models
+  - `scripts/pull_models.py` - Python script for pulling models
+  - `model_puller` Docker service that runs once on startup
+  - Healthcheck added to Ollama service for proper startup ordering
+- **Enhanced CLI commands:**
+  - `update-customer` - Update customer information (name, email, budget, active status)
+  - `delete-customer` - Delete customer with confirmation prompt (--force to skip)
+  - `refresh-key` - Revoke old API key and generate a new one
+  - Enhanced `--help` support with examples and detailed command help
+
+### Changed
+- Database name standardized: `lmsvr.db` → `lmapi.db` across all files
+- API key authentication: Changed from `APIKeyHeader` to `HTTPBearer` for proper Bearer token handling
+- `log_usage()` parameter: Fixed `metadata_json` → `metadata` for consistency
+- Setup script (`setup.sh`): Enhanced with Cloudflare tunnel setup integration and testing
+- `setup_tunnel_cli.sh`: Now reads domain from `.env` file automatically
+- All domain references now come from `.env` file (no hardcoded values)
+
+### Fixed
+- API key authentication issues (Bearer token extraction)
+- Database path consistency between CLI and Docker container
+- `log_usage()` parameter naming inconsistencies
+- Cloudflare tunnel DNS route configuration
+- Docker Compose YAML indentation issues
+
+### Documentation
+- Updated README.md with Cloudflare tunnel troubleshooting and testing
+- Updated cloudflare/README.md with DNS setup options and testing
+- Updated QUICKSTART.md with Cloudflare tunnel setup and testing examples
+- Created comprehensive Cloudflare setup guide (`docs/CLOUDFLARE_SETUP.md`)
+- Added curl command examples for all endpoints (localhost and Cloudflare tunnel)
+
 ## [Unreleased]
 
 ### Added

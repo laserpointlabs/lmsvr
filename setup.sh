@@ -75,7 +75,7 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
         echo -e "${YELLOW}  Please review and update .env file if needed${NC}"
     else
         cat > "$PROJECT_ROOT/.env" <<EOF
-DATABASE_URL=sqlite:///./data/lmsvr.db
+DATABASE_URL=sqlite:///./data/lmapi.db
 OLLAMA_BASE_URL=http://ollama:11434
 LOG_LEVEL=INFO
 EOF
@@ -108,18 +108,50 @@ if [ -f "$PROJECT_ROOT/requirements-dev.txt" ]; then
 fi
 echo ""
 
-# Step 5: Build Docker images
-echo -e "${YELLOW}Step 5: Building Docker images...${NC}"
+# Step 5: Export user/group IDs for Docker (must be before docker compose)
+# Note: UID is readonly in bash, so we use DOCKER_UID and DOCKER_GID
+export DOCKER_UID=$(id -u)
+export DOCKER_GID=$(id -g)
+echo -e "${BLUE}  Docker containers will run as UID: $DOCKER_UID, GID: $DOCKER_GID${NC}"
+echo ""
+
+# Step 5.5: Initialize database BEFORE Docker starts (ensures user ownership)
+echo -e "${YELLOW}Step 5.5: Initializing database...${NC}"
+export DATABASE_URL="sqlite:///./data/lmapi.db"
+python3 -c "from api_gateway.database import init_db; init_db()" 2>/dev/null || {
+    echo -e "${YELLOW}  Database initialization will happen on first API Gateway start${NC}"
+}
+# Ensure database file has correct permissions (writable by container)
+if [ -f "$PROJECT_ROOT/data/lmapi.db" ]; then
+    chmod 666 "$PROJECT_ROOT/data/lmapi.db" 2>/dev/null || true
+fi
+echo -e "${GREEN}✓ Database ready${NC}"
+echo ""
+
+# Step 6: Build Docker images
+echo -e "${YELLOW}Step 6: Building Docker images...${NC}"
 cd "$PROJECT_ROOT"
 docker compose build --quiet
 echo -e "${GREEN}✓ Docker images built${NC}"
 echo ""
 
-# Step 6: Start core services
-echo -e "${YELLOW}Step 6: Starting core services...${NC}"
-docker compose up -d ollama api_gateway
+# Step 7: Start core services
+echo -e "${YELLOW}Step 7: Starting core services...${NC}"
+# Start all services including cloudflared if configured
+if [ -f "$PROJECT_ROOT/cloudflare/credentials.json" ] && [ -f "$PROJECT_ROOT/cloudflare/config.yml" ]; then
+    echo -e "${BLUE}  Cloudflare tunnel detected, starting all services...${NC}"
+    docker compose up -d ollama api_gateway cloudflared
+else
+    docker compose up -d ollama api_gateway
+fi
 echo "Waiting for services to start..."
 sleep 10
+
+# Ensure database file has correct ownership after Docker starts
+if [ -f "$PROJECT_ROOT/data/lmapi.db" ]; then
+    chown "$(id -u):$(id -g)" "$PROJECT_ROOT/data/lmapi.db" 2>/dev/null || true
+    chmod 644 "$PROJECT_ROOT/data/lmapi.db" 2>/dev/null || true
+fi
 
 # Check Ollama
 if docker compose ps ollama | grep -q "Up"; then
@@ -138,10 +170,19 @@ else
     docker compose logs api_gateway --tail 10
     exit 1
 fi
+
+# Check Cloudflare tunnel if it was started
+if [ -f "$PROJECT_ROOT/cloudflare/credentials.json" ] && [ -f "$PROJECT_ROOT/cloudflare/config.yml" ]; then
+    if docker compose ps cloudflared | grep -q "Up"; then
+        echo -e "${GREEN}✓ Cloudflare tunnel is running${NC}"
+    else
+        echo -e "${YELLOW}⚠ Cloudflare tunnel may still be starting${NC}"
+    fi
+fi
 echo ""
 
-# Step 7: Test core services
-echo -e "${YELLOW}Step 7: Testing core services...${NC}"
+# Step 8: Test core services
+echo -e "${YELLOW}Step 8: Testing core services...${NC}"
 
 # Test API Gateway health
 for i in {1..30}; do
@@ -165,16 +206,26 @@ else
 fi
 echo ""
 
-# Step 8: Initialize database
-echo -e "${YELLOW}Step 8: Initializing database...${NC}"
-cd "$PROJECT_ROOT"
-source venv/bin/activate
-python3 -c "from api_gateway.database import init_db; init_db(); print('Database initialized')" 2>&1
-echo -e "${GREEN}✓ Database initialized${NC}"
+# Step 9: Verify database ownership
+echo -e "${YELLOW}Step 9: Verifying database permissions...${NC}"
+if [ -f "$PROJECT_ROOT/data/lmapi.db" ]; then
+    # Fix ownership if needed (in case Docker created it)
+    chown "$(id -u):$(id -g)" "$PROJECT_ROOT/data/lmapi.db" 2>/dev/null || true
+    chmod 644 "$PROJECT_ROOT/data/lmapi.db" 2>/dev/null || true
+    echo -e "${GREEN}✓ Database permissions verified${NC}"
+else
+    # Initialize database if it doesn't exist
+    cd "$PROJECT_ROOT"
+    source venv/bin/activate
+    export DATABASE_URL="sqlite:///./data/lmapi.db"
+    python3 -c "from api_gateway.database import init_db; init_db(); print('Database initialized')" 2>&1
+    chmod 644 "$PROJECT_ROOT/data/lmapi.db" 2>/dev/null || true
+    echo -e "${GREEN}✓ Database initialized${NC}"
+fi
 echo ""
 
-# Step 9: Cloudflare Tunnel setup (optional)
-echo -e "${YELLOW}Step 9: Cloudflare Tunnel setup (optional)...${NC}"
+# Step 10: Cloudflare Tunnel setup (optional)
+echo -e "${YELLOW}Step 10: Cloudflare Tunnel setup (optional)...${NC}"
 read -p "Do you want to set up Cloudflare Tunnel? (y/n): " SETUP_TUNNEL
 
 if [[ "$SETUP_TUNNEL" =~ ^[Yy]$ ]]; then
@@ -183,15 +234,41 @@ if [[ "$SETUP_TUNNEL" =~ ^[Yy]$ ]]; then
         cd "$PROJECT_ROOT/cloudflare"
         bash setup_tunnel_cli.sh
         
+        # Sync config from .env if it exists
+        if [ -f "$PROJECT_ROOT/.env" ]; then
+            if [ -f "$PROJECT_ROOT/cloudflare/update_config_from_env.sh" ]; then
+                echo "Syncing Cloudflare config from .env..."
+                bash update_config_from_env.sh
+            fi
+        fi
+        
         # Start Cloudflare container
         cd "$PROJECT_ROOT"
         docker compose up -d cloudflared
-        sleep 5
+        sleep 8
         
+        # Check tunnel status
         if docker compose ps cloudflared | grep -q "Up"; then
-            echo -e "${GREEN}✓ Cloudflare tunnel is running${NC}"
+            echo -e "${GREEN}✓ Cloudflare tunnel container is running${NC}"
+            
+            # Check tunnel connections
+            if docker compose logs cloudflared 2>&1 | grep -q "Registered tunnel connection"; then
+                echo -e "${GREEN}✓ Cloudflare tunnel is connected${NC}"
+            else
+                echo -e "${YELLOW}⚠ Tunnel may still be connecting...${NC}"
+            fi
+            
+            # Get domain from .env
+            TUNNEL_URL=$(grep "^CLOUDFLARE_TUNNEL_URL=" "$PROJECT_ROOT/.env" 2>/dev/null | cut -d'=' -f2 | sed 's|https://||' | sed 's|http://||' | tr -d '"' | tr -d "'" || echo "lmapi.laserpointlabs.com")
+            
+            echo ""
+            echo -e "${BLUE}Cloudflare Tunnel configured:${NC}"
+            echo "  Domain: $TUNNEL_URL"
+            echo "  Note: DNS propagation may take 2-5 minutes"
+            echo "  Test: curl https://$TUNNEL_URL/health"
         else
-            echo -e "${YELLOW}⚠ Cloudflare tunnel may need configuration${NC}"
+            echo -e "${YELLOW}⚠ Cloudflare tunnel container failed to start${NC}"
+            echo "  Check logs: docker compose logs cloudflared"
         fi
     else
         echo -e "${YELLOW}⚠ Cloudflare setup script not found${NC}"
@@ -201,8 +278,8 @@ else
 fi
 echo ""
 
-# Step 10: Run tests
-echo -e "${YELLOW}Step 10: Running tests...${NC}"
+# Step 11: Run tests
+echo -e "${YELLOW}Step 11: Running tests...${NC}"
 cd "$PROJECT_ROOT"
 source venv/bin/activate
 
@@ -226,6 +303,27 @@ if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
     fi
 else
     echo -e "${YELLOW}⚠ Skipping API tests (API Gateway not accessible)${NC}"
+fi
+
+# Test Cloudflare tunnel if configured
+if [[ "$SETUP_TUNNEL" =~ ^[Yy]$ ]]; then
+    echo ""
+    echo -e "${YELLOW}Testing Cloudflare tunnel...${NC}"
+    TUNNEL_URL=$(grep "^CLOUDFLARE_TUNNEL_URL=" "$PROJECT_ROOT/.env" 2>/dev/null | cut -d'=' -f2 | sed 's|https://||' | sed 's|http://||' | tr -d '"' | tr -d "'" || echo "")
+    
+    if [ -n "$TUNNEL_URL" ]; then
+        echo "Waiting for DNS propagation (10 seconds)..."
+        sleep 10
+        
+        if curl -sf "https://$TUNNEL_URL/health" > /dev/null 2>&1; then
+            echo -e "${GREEN}✓ Cloudflare tunnel is accessible${NC}"
+            curl -s "https://$TUNNEL_URL/health" | python3 -m json.tool 2>/dev/null || echo "  Response received"
+        else
+            echo -e "${YELLOW}⚠ Cloudflare tunnel not yet accessible${NC}"
+            echo "  This is normal - DNS propagation can take 2-5 minutes"
+            echo "  Tunnel container is running, check DNS in Cloudflare dashboard"
+        fi
+    fi
 fi
 echo ""
 
@@ -253,11 +351,21 @@ echo "4. Set pricing:"
 echo "   python3 cli/cli.py set-pricing llama3 0.001 0.002"
 echo ""
 echo "5. Test the API:"
-echo "   curl -H \"Authorization: Bearer <your_api_key>\" http://localhost:8001/api/models"
+TUNNEL_URL=$(grep "^CLOUDFLARE_TUNNEL_URL=" "$PROJECT_ROOT/.env" 2>/dev/null | cut -d'=' -f2 | sed 's|https://||' | sed 's|http://||' | tr -d '"' | tr -d "'" || echo "")
+if [ -n "$TUNNEL_URL" ] && [[ "$SETUP_TUNNEL" =~ ^[Yy]$ ]]; then
+    echo "   # Via Cloudflare Tunnel (recommended):"
+    echo "   curl -H \"Authorization: Bearer <your_api_key>\" https://$TUNNEL_URL/api/models"
+    echo ""
+    echo "   # Via localhost:"
+    echo "   curl -H \"Authorization: Bearer <your_api_key>\" http://localhost:8001/api/models"
+else
+    echo "   curl -H \"Authorization: Bearer <your_api_key>\" http://localhost:8001/api/models"
+fi
 echo ""
 if [[ "$SETUP_TUNNEL" =~ ^[Yy]$ ]]; then
+    TUNNEL_URL=$(grep "^CLOUDFLARE_TUNNEL_URL=" "$PROJECT_ROOT/.env" 2>/dev/null | cut -d'=' -f2 | sed 's|https://||' | sed 's|http://||' | tr -d '"' | tr -d "'" || echo "lmapi.laserpointlabs.com")
     echo "6. Test Cloudflare tunnel (after DNS propagation, ~2-5 minutes):"
-    echo "   curl https://api.yourdomain.com/health"
+    echo "   curl https://$TUNNEL_URL/health"
     echo ""
 fi
 echo "Useful Commands:"
