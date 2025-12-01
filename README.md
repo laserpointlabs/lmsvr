@@ -21,7 +21,24 @@ A production-ready API gateway for Ollama that provides API key authentication, 
 - Cloudflare account (for tunnel)
 - Python 3.11+ (for CLI tool)
 
-### 1. Start Services
+### 1. Configure Environment Variables
+
+Copy the example environment file and update as needed:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your configuration:
+- `DATABASE_URL`: SQLite database path (default: `sqlite:///./data/lmsvr.db`)
+- `OLLAMA_BASE_URL`: Ollama service URL (default: `http://ollama:11434`)
+- `OPENAI_API_KEY`: Optional - for OpenAI pass-through endpoints
+- `ANTHROPIC_API_KEY`: Optional - for Claude pass-through endpoints
+- `LOG_LEVEL`: Logging level (default: `INFO`)
+
+**Note:** The `.env` file is gitignored and won't be committed to the repository.
+
+### 2. Start Services
 
 ```bash
 docker-compose up -d
@@ -31,33 +48,40 @@ This will start:
 - Ollama service on port 11434
 - API Gateway on port 8000
 
-### 2. Pull Models
+### 3. Pull Models
 
 ```bash
 docker exec -it ollama ollama pull llama3
 docker exec -it ollama ollama pull mistral
 ```
 
-Or use the CLI:
+Or use the CLI to list available models:
 ```bash
 python cli/cli.py list-models
 ```
 
-### 3. Create a Customer
+**Optional:** Sync models to database for metadata tracking:
+```bash
+python cli/cli.py sync-models
+```
+
+This will populate the `model_metadata` table with available models, enabling richer API responses with descriptions and context windows.
+
+### 4. Create a Customer
 
 ```bash
 python cli/cli.py create-customer "John Doe" "john@example.com" --budget 100.0
 ```
 
-### 4. Generate API Key
+### 5. Generate API Key
 
 ```bash
 python cli/cli.py generate-key 1
 ```
 
-Save the API key securely - it won't be shown again!
+**Important:** Save the API key securely - it won't be shown again!
 
-### 5. Set Pricing
+### 6. Set Pricing
 
 ```bash
 python cli/cli.py set-pricing llama3 0.001 0.002
@@ -67,7 +91,9 @@ This sets:
 - $0.001 per request
 - $0.002 per model usage
 
-### 6. Configure Cloudflare Tunnel
+You can set pricing for each model individually. Models without pricing configured will use a default rate of $0.01 per request.
+
+### 7. Configure Cloudflare Tunnel
 
 **Quick setup (recommended):**
 ```bash
@@ -131,22 +157,30 @@ python cli/cli.py export-usage <customer_id> [--format csv|json] [--start-date] 
 python cli/cli.py set-pricing <model> <per_request> <per_model>
 
 # Models
-python cli/cli.py list-models
+python cli/cli.py list-models          # List available Ollama models
+python cli/cli.py sync-models          # Sync models to database for metadata
 ```
 
 ## Configuration
 
-Copy `.env.example` to `.env` and update as needed:
+### Environment Variables
+
+The application uses environment variables for configuration. Create a `.env` file from the example:
 
 ```bash
 cp .env.example .env
 ```
 
-Key settings:
-- `DATABASE_URL` - SQLite database path
-- `OLLAMA_BASE_URL` - Ollama service URL
-- `OPENAI_API_KEY` - For OpenAI pass-through (optional)
-- `ANTHROPIC_API_KEY` - For Claude pass-through (optional)
+**Required Settings:**
+- `DATABASE_URL` - SQLite database path (default: `sqlite:///./data/lmsvr.db`)
+- `OLLAMA_BASE_URL` - Ollama service URL (default: `http://ollama:11434` for Docker)
+
+**Optional Settings:**
+- `OPENAI_API_KEY` - For OpenAI pass-through endpoints (`/v1/chat/completions`)
+- `ANTHROPIC_API_KEY` - For Claude pass-through endpoints (`/v1/messages`)
+- `LOG_LEVEL` - Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` (default: `INFO`)
+
+**Note:** The `.env` file is gitignored and will not be committed to version control. Each deployment should have its own `.env` file.
 
 ## Database
 
@@ -157,6 +191,8 @@ The SQLite database is stored in `data/lmsvr.db` and contains:
 - Pricing Configuration
 
 ## Model Management
+
+### Using Ollama Commands
 
 Models are managed using Ollama's native commands:
 
@@ -171,7 +207,38 @@ docker exec -it ollama ollama list
 docker exec -it ollama ollama rm llama3
 ```
 
-Customers can discover available models via the `/api/models` or `/v1/models` endpoints.
+### Using CLI Tools
+
+```bash
+# List available models
+python cli/cli.py list-models
+
+# Sync models to database (for metadata tracking)
+python cli/cli.py sync-models
+```
+
+### Model Discovery
+
+Customers can discover available models via:
+- `/api/models` - Ollama-compatible format
+- `/v1/models` - OpenAI-compatible format
+
+These endpoints return:
+- Model name and ID
+- Pricing configuration status
+- Model metadata (description, context window) if synced via `sync-models`
+
+### Model Metadata
+
+The `sync-models` command populates the `model_metadata` table with information about available models. This enables:
+- Richer API responses with model descriptions
+- Context window information
+- Better model discovery for customers
+
+To update metadata after adding new models:
+```bash
+python cli/cli.py sync-models
+```
 
 ## Pricing Model
 
@@ -198,6 +265,10 @@ docker ps
 docker logs ollama
 ```
 
+Verify the `OLLAMA_BASE_URL` in your `.env` file matches your setup:
+- Docker Compose: `http://ollama:11434`
+- Local development: `http://localhost:11434`
+
 ### Database errors
 
 Ensure the `data/` directory exists and is writable:
@@ -206,9 +277,25 @@ mkdir -p data
 chmod 755 data
 ```
 
+Check that `DATABASE_URL` in `.env` points to a valid path.
+
+### Environment Variables Not Loading
+
+If environment variables aren't being picked up:
+1. Ensure `.env` file exists in the project root
+2. Check that variable names match exactly (case-sensitive)
+3. Restart Docker containers: `docker-compose restart api_gateway`
+
 ### Cloudflare Tunnel issues
 
 See `cloudflare/README.md` for troubleshooting.
+
+### CLI Connection Errors
+
+If CLI commands can't connect to the database:
+- Ensure the database file exists: `ls -la data/lmsvr.db`
+- Check file permissions: `chmod 644 data/lmsvr.db`
+- Verify `DATABASE_URL` in `.env` matches the CLI's expected path
 
 ## License
 
