@@ -338,7 +338,7 @@ class AuditLog(Base):
 # Returns:
 {
     "id": 5,
-    "api_key": "sk_live_full_key_here",
+    "api_key": "sk_example_full_key_here",
     "created_at": "2024-12-01T14:23:00Z",
     ...
 }
