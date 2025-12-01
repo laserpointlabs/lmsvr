@@ -81,6 +81,8 @@ class ModelInfo(BaseModel):
     id: str
     name: str
     pricing_configured: bool = False
+    description: Optional[str] = None
+    context_window: Optional[int] = None
 
 
 class ModelsListResponse(BaseModel):

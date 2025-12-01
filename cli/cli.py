@@ -15,7 +15,7 @@ import csv
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from api_gateway.database import get_db_session, Customer, APIKey, UsageLog, PricingConfig
+from api_gateway.database import get_db_session_sync, Customer, APIKey, UsageLog, PricingConfig, ModelMetadata
 from api_gateway.auth import hash_api_key
 from api_gateway.usage import get_usage_summary, check_budget
 
@@ -27,7 +27,7 @@ def generate_api_key() -> str:
 
 def create_customer(name: str, email: str, monthly_budget: Optional[float] = None):
     """Create a new customer."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         # Check if email already exists
         existing = db.query(Customer).filter(Customer.email == email).first()
@@ -58,7 +58,7 @@ def create_customer(name: str, email: str, monthly_budget: Optional[float] = Non
 
 def generate_key(customer_id: int):
     """Generate an API key for a customer."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
@@ -92,7 +92,7 @@ def generate_key(customer_id: int):
 
 def revoke_key(key_id: int):
     """Revoke an API key."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         db_key = db.query(APIKey).filter(APIKey.id == key_id).first()
         if not db_key:
@@ -113,7 +113,7 @@ def revoke_key(key_id: int):
 
 def list_customers():
     """List all customers."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         customers = db.query(Customer).order_by(Customer.id).all()
         if not customers:
@@ -135,7 +135,7 @@ def list_customers():
 
 def list_keys(customer_id: int):
     """List API keys for a customer."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
@@ -163,7 +163,7 @@ def list_keys(customer_id: int):
 
 def usage_report(customer_id: int, start_date: Optional[str] = None, end_date: Optional[str] = None):
     """View usage report for a customer."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
@@ -199,7 +199,7 @@ def usage_report(customer_id: int, start_date: Optional[str] = None, end_date: O
 
 def check_budget_status(customer_id: int):
     """Check budget status for a customer."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
@@ -227,7 +227,7 @@ def check_budget_status(customer_id: int):
 
 def export_usage(customer_id: int, format_type: str = "csv", start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Export usage data for a customer."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
         if not customer:
@@ -292,7 +292,7 @@ def export_usage(customer_id: int, format_type: str = "csv", start_date: Optiona
 
 def set_pricing(model_name: str, per_request_cost: float, per_model_cost: float):
     """Set pricing for a model."""
-    db = get_db_session()
+    db = get_db_session_sync()
     try:
         pricing = db.query(PricingConfig).filter(PricingConfig.model_name == model_name).first()
         
@@ -319,6 +319,60 @@ def set_pricing(model_name: str, per_request_cost: float, per_model_cost: float)
         print(f"Error setting pricing: {e}")
     finally:
         db.close()
+
+
+def sync_models():
+    """Sync available models from Ollama to database."""
+    import httpx
+    import asyncio
+    
+    async def sync():
+        db = get_db_session_sync()
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get("http://localhost:11434/api/tags")
+                if response.status_code == 200:
+                    data = response.json()
+                    models = data.get("models", [])
+                    
+                    if not models:
+                        print("No models found in Ollama.")
+                        return
+                    
+                    synced_count = 0
+                    for model in models:
+                        model_name = model.get("name", "")
+                        if not model_name:
+                            continue
+                        
+                        # Check if model metadata already exists
+                        existing = db.query(ModelMetadata).filter(
+                            ModelMetadata.model_name == model_name
+                        ).first()
+                        
+                        if not existing:
+                            # Create new metadata entry
+                            metadata = ModelMetadata(
+                                model_name=model_name,
+                                description=f"Ollama model: {model_name}",
+                                context_window=None  # Can be updated later
+                            )
+                            db.add(metadata)
+                            synced_count += 1
+                    
+                    db.commit()
+                    print(f"✓ Synced {synced_count} new model(s) to database")
+                    print(f"  Total models in database: {len(models)}")
+                else:
+                    print("Error: Could not connect to Ollama. Is it running?")
+        except Exception as e:
+            db.rollback()
+            print(f"Error syncing models: {e}")
+            print("Make sure Ollama is running on localhost:11434")
+        finally:
+            db.close()
+    
+    asyncio.run(sync())
 
 
 def list_models():
@@ -406,6 +460,9 @@ def main():
     # List models
     subparsers.add_parser("list-models", help="List available Ollama models")
     
+    # Sync models
+    subparsers.add_parser("sync-models", help="Sync available models from Ollama to database")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -432,6 +489,8 @@ def main():
         set_pricing(args.model, args.per_request, args.per_model)
     elif args.command == "list-models":
         list_models()
+    elif args.command == "sync-models":
+        sync_models()
 
 
 if __name__ == "__main__":

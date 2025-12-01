@@ -106,7 +106,7 @@ async def get_models(
     db: Session = Depends(get_db_session)
 ):
     """List available models (Ollama format)."""
-    from database import PricingConfig
+    from database import PricingConfig, ModelMetadata
     
     models = await list_models()
     
@@ -116,9 +116,15 @@ async def get_models(
     ).all()
     pricing_map = {p.model_name: True for p in pricing_configs}
     
+    # Get model metadata
+    metadata_records = db.query(ModelMetadata).all()
+    metadata_map = {m.model_name: m for m in metadata_records}
+    
     model_list = []
     for model in models:
         model_name = model.get("name", "")
+        metadata = metadata_map.get(model_name)
+        
         model_list.append(ModelInfo(
             id=model_name,
             name=model_name,
@@ -134,7 +140,7 @@ async def get_models_openai_format(
     db: Session = Depends(get_db_session)
 ):
     """List available models (OpenAI-compatible format)."""
-    from database import PricingConfig
+    from database import PricingConfig, ModelMetadata
     
     models = await list_models()
     
@@ -144,16 +150,31 @@ async def get_models_openai_format(
     ).all()
     pricing_map = {p.model_name: True for p in pricing_configs}
     
+    # Get model metadata
+    metadata_records = db.query(ModelMetadata).all()
+    metadata_map = {m.model_name: m for m in metadata_records}
+    
     model_list = []
     for model in models:
         model_name = model.get("name", "")
-        model_list.append({
+        metadata = metadata_map.get(model_name)
+        
+        model_data = {
             "id": model_name,
             "object": "model",
             "created": int(datetime.utcnow().timestamp()),
             "owned_by": "ollama",
             "pricing_configured": model_name in pricing_map
-        })
+        }
+        
+        # Add metadata if available
+        if metadata:
+            if metadata.description:
+                model_data["description"] = metadata.description
+            if metadata.context_window:
+                model_data["context_window"] = metadata.context_window
+        
+        model_list.append(model_data)
     
     return {
         "object": "list",

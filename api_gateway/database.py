@@ -111,3 +111,8 @@ def get_db_session():
     finally:
         db.close()
 
+
+def get_db_session_sync():
+    """Get database session synchronously (for CLI scripts)."""
+    return SessionLocal()
+
