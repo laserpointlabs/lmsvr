@@ -105,13 +105,14 @@ if [ -z "$CREDENTIALS_FILE" ]; then
 fi
 
 # Create config.yml
+# Use container path for credentials file
 cat > "$CONFIG_FILE" << EOF
 tunnel: $TUNNEL_ID
-credentials-file: $CREDENTIALS_FILE
+credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
   - hostname: $DOMAIN_NAME
-    service: http://localhost:8000
+    service: http://api_gateway:8000
   - service: http_status:404
 EOF
 
@@ -127,8 +128,20 @@ else
 fi
 echo ""
 
-# Step 7: Create systemd service (optional)
-echo -e "${YELLOW}Step 7: Systemd Service Setup (Optional)${NC}"
+# Step 7: Copy credentials for Docker
+echo -e "${YELLOW}Step 7: Preparing Docker credentials...${NC}"
+if [ -f "$CREDENTIALS_FILE" ]; then
+    cp "$CREDENTIALS_FILE" "$CONFIG_DIR/credentials.json"
+    echo -e "${GREEN}✓ Credentials copied to $CONFIG_DIR/credentials.json${NC}"
+    echo "  Docker container will use: ./cloudflare/credentials.json:/etc/cloudflared/credentials.json:ro"
+else
+    echo -e "${YELLOW}⚠ Credentials file not found at $CREDENTIALS_FILE${NC}"
+    echo "  Please copy your tunnel credentials file to: $CONFIG_DIR/credentials.json"
+fi
+echo ""
+
+# Step 8: Create systemd service (optional)
+echo -e "${YELLOW}Step 8: Systemd Service Setup (Optional)${NC}"
 read -p "Create systemd service to run tunnel automatically? (y/n): " CREATE_SERVICE
 
 if [[ "$CREATE_SERVICE" =~ ^[Yy]$ ]]; then
@@ -169,14 +182,17 @@ echo "Tunnel ID: $TUNNEL_ID"
 echo "Domain: $DOMAIN_NAME"
 echo "Config File: $CONFIG_FILE"
 echo ""
-echo "To run the tunnel manually:"
+echo "To run the tunnel with Docker Compose:"
+echo "  docker compose --profile tunnel up -d cloudflared"
+echo ""
+echo "Or run manually:"
 echo "  cloudflared tunnel --config $CONFIG_FILE run"
 echo ""
 echo "Or use the systemd service (if created):"
 echo "  sudo systemctl start cloudflared-tunnel"
 echo ""
 echo -e "${YELLOW}Important:${NC}"
-echo "1. Make sure the API Gateway is running on localhost:8000"
+echo "1. Make sure the API Gateway is running: docker compose up -d api_gateway"
 echo "2. Ensure DNS propagation is complete (may take a few minutes)"
 echo "3. Test the connection: curl https://$DOMAIN_NAME/health"
 echo ""

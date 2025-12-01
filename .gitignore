@@ -46,7 +46,7 @@ logs/
 
 # Cloudflare
 cloudflare/*.json
-cloudflare/credentials/
+!cloudflare/config.yml
 
 # OS
 .DS_Store

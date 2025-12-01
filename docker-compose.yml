@@ -1,4 +1,5 @@
-version: '3.8'
+# Docker Compose configuration for Ollama API Gateway
+# Note: version field is obsolete in Docker Compose v2+
 
 services:
   ollama:
@@ -10,6 +11,18 @@ services:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
+    # GPU configuration - requires NVIDIA Container Toolkit
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    # Alternative GPU configuration (use if deploy doesn't work)
+    # runtime: nvidia
+    # environment:
+    #   - NVIDIA_VISIBLE_DEVICES=all
     restart: unless-stopped
     networks:
       - lmsvr_network
@@ -20,7 +33,7 @@ services:
       dockerfile: Dockerfile
     container_name: api_gateway
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./data:/app/data
       - ./api_gateway:/app
@@ -34,10 +47,27 @@ services:
     networks:
       - lmsvr_network
 
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    # Using config file for ingress rules (CLI control)
+    command: tunnel --config /etc/cloudflared/config.yml run
+    depends_on:
+      api_gateway:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - lmsvr_network
+    volumes:
+      - ./cloudflare/config.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare/credentials.json:/etc/cloudflared/credentials.json:ro
+    # Note: Requires Cloudflare tunnel to be set up first
+    # Run: ./cloudflare/setup_tunnel_cli.sh for automated setup
+    # Credentials file should be at: cloudflare/credentials.json
+
 volumes:
   ollama_data:
 
 networks:
   lmsvr_network:
     driver: bridge
-

@@ -49,7 +49,7 @@ class UsageLog(Base):
     request_count = Column(Integer, default=1)
     cost = Column(Float, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    metadata = Column(Text, nullable=True)  # JSON string for additional data
+    extra_data = Column(Text, nullable=True)  # JSON string for additional data (renamed from metadata to avoid SQLAlchemy conflict)
     
     customer = relationship("Customer", back_populates="usage_logs")
     api_key = relationship("APIKey", back_populates="usage_logs")

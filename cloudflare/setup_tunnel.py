@@ -138,12 +138,13 @@ def create_config_file(tunnel_id, domain, credentials_file, config_dir):
     
     config_file = config_dir / "config.yml"
     
+    # Use container path for credentials (matches working setup)
     config_content = f"""tunnel: {tunnel_id}
-credentials-file: {credentials_file}
+credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
   - hostname: {domain}
-    service: http://localhost:8000
+    service: http://api_gateway:8000
   - service: http_status:404
 """
     
@@ -247,7 +248,21 @@ def main():
     validate_config(config_file)
     print()
     
-    # Step 9: Optional systemd service
+    # Step 9: Copy credentials for Docker
+    print_colored("Step 9: Preparing Docker credentials...", Colors.YELLOW)
+    
+    import shutil
+    credentials_dest = config_dir / "credentials.json"
+    if os.path.exists(credentials_file):
+        shutil.copy(credentials_file, credentials_dest)
+        print_colored(f"✓ Credentials copied to {credentials_dest}", Colors.GREEN)
+        print("  Docker container will use: ./cloudflare/credentials.json:/etc/cloudflared/credentials.json:ro")
+    else:
+        print_colored(f"⚠ Credentials file not found at {credentials_file}", Colors.YELLOW)
+        print(f"  Please copy your tunnel credentials file to: {credentials_dest}")
+    print()
+    
+    # Step 10: Optional systemd service
     create_systemd_service(config_file)
     print()
     
@@ -260,7 +275,10 @@ def main():
     print(f"Domain: {domain}")
     print(f"Config File: {config_file}")
     print()
-    print("To run the tunnel manually:")
+    print("To run the tunnel with Docker Compose:")
+    print("  docker compose --profile tunnel up -d cloudflared")
+    print()
+    print("Or run manually:")
     print(f"  cloudflared tunnel --config {config_file} run")
     print()
     print_colored("Important:", Colors.YELLOW)

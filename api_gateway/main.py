@@ -1,7 +1,7 @@
 """
 Main FastAPI application for API Gateway.
 """
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -35,19 +35,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize database on startup
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup."""
-    init_db()
-    logger.info("Database initialized")
-
 # Create FastAPI app
 app = FastAPI(
     title="Ollama API Gateway",
     description="API Gateway for Ollama with authentication and billing",
     version="1.0.0"
 )
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup."""
+    init_db()
+    logger.info("Database initialized")
 
 # CORS middleware
 app.add_middleware(
@@ -218,7 +218,7 @@ async def ollama_chat(
             model=request.model,
             cost=cost,
             db=db,
-            metadata=json.dumps({"stream": request.stream})
+            extra_data=json.dumps({"stream": request.stream})
         )
         
         return response
@@ -266,7 +266,7 @@ async def ollama_generate(
             model=request.model,
             cost=cost,
             db=db,
-            metadata=json.dumps({"stream": request.stream})
+            extra_data=json.dumps({"stream": request.stream})
         )
         
         return response

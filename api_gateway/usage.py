@@ -53,7 +53,7 @@ def log_usage(
         request_count=1,
         cost=cost,
         timestamp=datetime.utcnow(),
-        metadata=metadata
+        extra_data=metadata
     )
     db.add(usage_log)
     db.commit()
