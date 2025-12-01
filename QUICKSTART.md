@@ -138,31 +138,11 @@ python3 cli/cli.py generate-key 1
 
 ### Pull Models
 
-**Option 1: Auto-pull on startup (Recommended)**
-
-Set `OLLAMA_MODELS` in your `.env` file:
-```bash
-OLLAMA_MODELS="llama3.2:1b mistral codellama"
-```
-
-Then restart services:
-```bash
-docker compose restart
-```
-
-Models will be pulled automatically when Ollama starts.
-
-**Option 2: Manual pull**
+**Pull models manually:**
 
 ```bash
 docker exec -it ollama ollama pull llama3.2:1b
 docker exec -it ollama ollama pull mistral
-```
-
-**Option 3: Use pull script**
-
-```bash
-OLLAMA_MODELS="llama3.2:1b mistral" ./scripts/pull_models.sh
 ```
 
 ### Set Pricing

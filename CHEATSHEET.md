@@ -212,30 +212,6 @@ docker exec -it ollama ollama list
 docker exec -it ollama ollama rm llama3.2:1b
 ```
 
-### Preload Models (Warmup to Avoid First-Request Latency)
-```bash
-# Automatic preloading via docker-compose (recommended)
-# Set in .env file:
-export OLLAMA_PRELOAD_MODELS="llama3.2:1b mistral"
-docker compose up -d
-
-# Manual preloading (Python script)
-OLLAMA_PRELOAD_MODELS="llama3.2:1b" python3 scripts/preload_models.py
-
-# Manual preloading (Bash script)
-OLLAMA_PRELOAD_MODELS="llama3.2:1b" ./scripts/preload_models.sh
-
-# Direct warmup via API
-curl -X POST http://localhost:11434/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "llama3.2:1b",
-    "prompt": "Hi",
-    "options": {"num_predict": 5}
-  }'
-
-# See docs/MODEL_PRELOADING.md for complete guide
-```
 
 ---
 

@@ -303,15 +303,6 @@ cp .env.example .env
   docker compose restart cloudflared
   ```
 
-- `OLLAMA_MODELS` - Space-separated list of Ollama models to automatically pull on startup (optional)
-  
-  **Example:**
-  ```bash
-  OLLAMA_MODELS="llama3.2:1b mistral codellama"
-  ```
-  
-  **Note:** Models are pulled automatically when Docker Compose starts. If a model already exists, it will be skipped. Leave empty to disable auto-pulling.
-
 **Note:** The `.env` file is gitignored and will not be committed to version control. Each deployment should have its own `.env` file.
 
 ## Database
@@ -324,25 +315,9 @@ The SQLite database is stored in `data/lmsvr.db` and contains:
 
 ## Model Management
 
-### Auto-Pulling Models on Startup
-
-Set `OLLAMA_MODELS` in your `.env` file to automatically pull models when Docker Compose starts:
-
-```bash
-OLLAMA_MODELS="llama3.2:1b mistral codellama"
-```
-
-The `model_puller` service will:
-- Wait for Ollama to be ready
-- Check if models already exist (skips if present)
-- Pull any missing models automatically
-- Exit after completion
-
-**Note:** Model pulling happens in the background. Large models may take several minutes to download.
-
 ### Using Ollama Commands
 
-Models can also be managed manually using Ollama's native commands:
+Models are managed manually using Ollama's native commands:
 
 ```bash
 # Pull a model
@@ -353,18 +328,6 @@ docker exec -it ollama ollama list
 
 # Remove a model
 docker exec -it ollama ollama rm llama3
-```
-
-### Manual Model Pulling Scripts
-
-You can also use the provided scripts to pull models:
-
-```bash
-# Bash version
-OLLAMA_MODELS="llama3.2:1b mistral" ./scripts/pull_models.sh
-
-# Python version
-OLLAMA_MODELS="llama3.2:1b mistral" python3 scripts/pull_models.py
 ```
 
 ### Using CLI Tools
