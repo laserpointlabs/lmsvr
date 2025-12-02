@@ -1,0 +1,134 @@
+name: LaserPoint Labs API Gateway
+version: 1.0.0
+schema: v1
+
+models:
+  # Qwen3 Coder 30B - Best for Agent Plan, Chat, and Edit
+  - name: Qwen3 Coder 30B
+    provider: openai
+    model: qwen3-coder:30b
+    apiBase: https://lmapi.laserpointlabs.com/v1
+    roles:
+      - chat
+      - edit
+      - apply
+    capabilities:
+      - tool_use
+    defaultCompletionOptions:
+      temperature: 0.7
+      maxTokens: 4096
+    requestOptions:
+      headers:
+        Authorization: Bearer ${LMAPI_API_KEY}
+      timeout: 300
+      verifySsl: true
+
+  # Devstral 27B - Alternative for Agent Plan, Chat, and Edit
+  - name: Devstral 27B
+    provider: openai
+    model: devstral
+    apiBase: https://lmapi.laserpointlabs.com/v1
+    roles:
+      - chat
+      - edit
+      - apply
+    capabilities:
+      - tool_use
+    defaultCompletionOptions:
+      temperature: 0.7
+      maxTokens: 4096
+    requestOptions:
+      headers:
+        Authorization: Bearer ${LMAPI_API_KEY}
+      timeout: 300
+      verifySsl: true
+
+  # GPT-OSS 20B - Good balance for Chat and Edit
+  - name: GPT-OSS 20B
+    provider: openai
+    model: gpt-oss:20b
+    apiBase: https://lmapi.laserpointlabs.com/v1
+    roles:
+      - chat
+      - edit
+      - apply
+    capabilities:
+      - tool_use
+    defaultCompletionOptions:
+      temperature: 0.7
+      maxTokens: 4096
+    requestOptions:
+      headers:
+        Authorization: Bearer ${LMAPI_API_KEY}
+      timeout: 300
+      verifySsl: true
+
+  # Qwen2.5-Coder 1.5B - Fast autocomplete
+  - name: Qwen2.5-Coder 1.5B
+    provider: openai
+    model: qwen2.5-coder:1.5b-base
+    apiBase: https://lmapi.laserpointlabs.com/v1
+    roles:
+      - autocomplete
+    autocompleteOptions:
+      debounceDelay: 350
+      maxPromptTokens: 1024
+      onlyMyCode: true
+      useCache: true
+    defaultCompletionOptions:
+      temperature: 0.3
+      maxTokens: 256
+    requestOptions:
+      headers:
+        Authorization: Bearer ${LMAPI_API_KEY}
+      timeout: 60
+      verifySsl: true
+
+  # Qwen2.5-Coder 7B - Higher quality autocomplete
+  - name: Qwen2.5-Coder 7B
+    provider: openai
+    model: qwen2.5-coder:7b-base
+    apiBase: https://lmapi.laserpointlabs.com/v1
+    roles:
+      - autocomplete
+    autocompleteOptions:
+      debounceDelay: 350
+      maxPromptTokens: 2048
+      onlyMyCode: true
+      useCache: true
+    defaultCompletionOptions:
+      temperature: 0.3
+      maxTokens: 512
+    requestOptions:
+      headers:
+        Authorization: Bearer ${LMAPI_API_KEY}
+      timeout: 120
+      verifySsl: true
+
+  # Nomic Embed Text - For embeddings and code search
+  - name: Nomic Embed Text
+    provider: openai
+    model: nomic-embed-text
+    apiBase: https://lmapi.laserpointlabs.com/v1
+    roles:
+      - embed
+    embedOptions:
+      maxChunkSize: 512
+      maxBatchSize: 100
+    requestOptions:
+      headers:
+        Authorization: Bearer ${LMAPI_API_KEY}
+      timeout: 60
+      verifySsl: true
+
+context:
+  - provider: file
+  - provider: code
+  - provider: diff
+  - provider: terminal
+
+rules:
+  - Be concise and helpful in responses
+  - Focus on code quality and best practices
+  - When editing code, maintain existing patterns and style
+

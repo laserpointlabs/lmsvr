@@ -24,3 +24,4 @@ fi
 wait $OLLAMA_PID
 
 
+
