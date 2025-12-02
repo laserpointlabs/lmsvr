@@ -3,7 +3,7 @@ Client wrapper for Ollama API calls.
 """
 import httpx
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, AsyncGenerator
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,11 +28,11 @@ async def list_models() -> list[Dict[str, Any]]:
 
 
 async def chat(model: str, messages: list, stream: bool = False, options: Optional[Dict] = None) -> Dict[str, Any]:
-    """Send chat request to Ollama."""
+    """Send chat request to Ollama (non-streaming)."""
     payload = {
         "model": model,
         "messages": messages,
-        "stream": stream
+        "stream": False  # Always non-streaming for this function
     }
     if options:
         payload["options"] = options
@@ -44,6 +44,28 @@ async def chat(model: str, messages: list, stream: bool = False, options: Option
         )
         response.raise_for_status()
         return response.json()
+
+
+async def chat_stream(model: str, messages: list, options: Optional[Dict] = None) -> AsyncGenerator[bytes, None]:
+    """Send streaming chat request to Ollama, yields raw bytes for SSE."""
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": True
+    }
+    if options:
+        payload["options"] = options
+    
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        async with client.stream(
+            "POST",
+            f"{OLLAMA_BASE_URL}/api/chat",
+            json=payload
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line:
+                    yield line.encode() + b"\n"
 
 
 async def generate(model: str, prompt: str, stream: bool = False, options: Optional[Dict] = None) -> Dict[str, Any]:

@@ -267,7 +267,8 @@ curl -H "Authorization: Bearer sk_your_api_key_here" \
 
 ### OpenAI-Compatible Endpoints
 
-- `POST /v1/chat/completions` - OpenAI-compatible chat
+- `POST /v1/chat/completions` - OpenAI-compatible chat (pass-through to external OpenAI)
+- `POST /v1/ollama/chat/completions` - OpenAI-compatible chat using local Ollama models
 - `GET /v1/models` - OpenAI-compatible model list
 
 ### Claude-Compatible Endpoints
@@ -279,6 +280,128 @@ curl -H "Authorization: Bearer sk_your_api_key_here" \
 - `GET /health` - API Gateway health (includes current timestamp)
 - `GET /health/ollama` - Ollama connectivity (includes current timestamp)
 - `GET /health/dashboard` - Interactive health dashboard with auto-updating time (HTML)
+
+## Continue.dev Integration
+
+This API gateway is compatible with [Continue.dev](https://continue.dev/), the open-source AI code assistant for VS Code and JetBrains IDEs.
+
+### Quick Setup (2 Steps)
+
+**Step 1: Save your API key**
+
+```bash
+mkdir -p ~/.continue && echo "LMAPI_KEY=your_api_key_here" > ~/.continue/.env
+```
+
+Replace `your_api_key_here` with your actual API key.
+
+**Step 2: Copy the config file**
+
+Copy the provided `config.yaml` to your project:
+
+```bash
+mkdir -p your-project/.continue/agents
+cp config.yaml your-project/.continue/agents/
+```
+
+**Step 3: Restart VS Code**
+
+Reload the VS Code window to apply the configuration.
+
+---
+
+### Config File Reference
+
+The config file (`.continue/agents/config.yaml`) should contain:
+
+```yaml
+name: LaserPoint Labs API Gateway
+version: 1.0.0
+schema: v1
+
+models:
+  # Qwen3 Coder 30B - Primary chat model
+  - name: Qwen3 Coder 30B
+    provider: openai
+    model: qwen3-coder:30b
+    apiBase: https://lmapi.laserpointlabs.com/v1/ollama
+    apiKey: ${{ secrets.LMAPI_KEY }}
+    roles:
+      - chat
+      - edit
+      - apply
+    defaultCompletionOptions:
+      temperature: 0.7
+      maxTokens: 4096
+    requestOptions:
+      timeout: 300
+
+  # Devstral 27B - Alternative chat model
+  - name: Devstral 27B
+    provider: openai
+    model: devstral
+    apiBase: https://lmapi.laserpointlabs.com/v1/ollama
+    apiKey: ${{ secrets.LMAPI_KEY }}
+    roles:
+      - chat
+      - edit
+      - apply
+    defaultCompletionOptions:
+      temperature: 0.7
+      maxTokens: 4096
+    requestOptions:
+      timeout: 300
+
+  # GPT-OSS 20B - Good balance for Chat and Edit
+  - name: GPT-OSS 20B
+    provider: openai
+    model: gpt-oss:20b
+    apiBase: https://lmapi.laserpointlabs.com/v1/ollama
+    apiKey: ${{ secrets.LMAPI_KEY }}
+    roles:
+      - chat
+      - edit
+      - apply
+    defaultCompletionOptions:
+      temperature: 0.7
+      maxTokens: 4096
+    requestOptions:
+      timeout: 300
+
+context:
+  - provider: file
+  - provider: code
+  - provider: diff
+  - provider: terminal
+
+rules:
+  - Be concise and helpful in responses
+  - Focus on code quality and best practices
+  - When editing code, maintain existing patterns and style
+```
+
+### Available Models
+
+| Model | Size | Best For |
+|-------|------|----------|
+| `qwen3-coder:30b` | 30B | Code generation, chat, editing |
+| `devstral` | 27B | Code generation, chat, editing |
+| `gpt-oss:20b` | 20B | General chat, code assistance |
+
+### Troubleshooting
+
+**401 Invalid API Key:**
+- Ensure `~/.continue/.env` exists with `LMAPI_KEY=your_key`
+- The syntax must be `${{ secrets.LMAPI_KEY }}` in the config
+- Restart VS Code after creating/changing `.env`
+
+**No Response (GPU fires but nothing appears):**
+- Ensure config uses `provider: openai` (not `provider: ollama`)
+- Ensure `apiBase` is `https://lmapi.laserpointlabs.com/v1/ollama`
+
+**Config Not Loading:**
+- Workspace config must be at `.continue/agents/config.yaml`
+- Reload VS Code window after config changes
 
 ## CLI Commands
 

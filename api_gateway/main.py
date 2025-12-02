@@ -3,17 +3,19 @@ Main FastAPI application for API Gateway.
 """
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 import logging
 import json
+import os
+import httpx
 from datetime import datetime, timezone
 from typing import Optional
 
 try:
     from .database import get_db_session, init_db, PricingConfig, ModelMetadata, Customer
     from .auth import get_current_customer
-    from .ollama_client import list_models, chat, generate, check_ollama_health
+    from .ollama_client import list_models, chat, chat_stream, generate, check_ollama_health
     from .usage import calculate_cost, log_usage, check_budget
     from .external_apis import (
         openai_chat_completions,
@@ -31,7 +33,7 @@ try:
 except ImportError:
     from database import get_db_session, init_db, PricingConfig, ModelMetadata, Customer
     from auth import get_current_customer
-    from ollama_client import list_models, chat, generate, check_ollama_health
+    from ollama_client import list_models, chat, chat_stream, generate, check_ollama_health
     from usage import calculate_cost, log_usage, check_budget
     from external_apis import (
         openai_chat_completions,
@@ -412,7 +414,7 @@ async def ollama_chat(
     customer_data: tuple = Depends(get_current_customer),
     db: Session = Depends(get_db_session)
 ):
-    """Ollama chat endpoint."""
+    """Ollama chat endpoint with streaming support."""
     customer, api_key = customer_data
     
     # Check budget
@@ -424,15 +426,7 @@ async def ollama_chat(
         )
     
     try:
-        # Call Ollama
-        response = await chat(
-            model=request.model,
-            messages=request.messages,
-            stream=request.stream,
-            options=request.options
-        )
-        
-        # Calculate and log cost
+        # Calculate and log cost upfront (for streaming we can't wait)
         cost = calculate_cost(request.model, "/api/chat", db)
         log_usage(
             customer_id=customer.id,
@@ -444,10 +438,57 @@ async def ollama_chat(
             metadata=json.dumps({"stream": request.stream})
         )
         
-        return response
+        if request.stream:
+            # Return streaming response
+            return StreamingResponse(
+                chat_stream(
+                    model=request.model,
+                    messages=request.messages,
+                    options=request.options
+                ),
+                media_type="application/x-ndjson"
+            )
+        else:
+            # Non-streaming response
+            response = await chat(
+                model=request.model,
+                messages=request.messages,
+                stream=False,
+                options=request.options
+            )
+            return response
         
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@app.post("/api/show")
+async def ollama_show(
+    request: dict,
+    customer_data: tuple = Depends(get_current_customer),
+    db: Session = Depends(get_db_session)
+):
+    """Ollama show model info endpoint - proxies to Ollama."""
+    try:
+        model_name = request.get("name", request.get("model", ""))
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{os.getenv('OLLAMA_BASE_URL', 'http://ollama:11434')}/api/show",
+                json={"name": model_name}
+            )
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Ollama returned {response.status_code}"
+                )
+    except httpx.HTTPError as e:
+        logger.error(f"Error in show endpoint: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
@@ -554,6 +595,133 @@ async def openai_chat_completions(
         )
     except Exception as e:
         logger.error(f"Error in OpenAI chat completions: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+# OpenAI-compatible endpoint for Ollama models
+@app.post("/v1/ollama/chat/completions")
+async def ollama_openai_chat_completions(
+    request: OpenAICompletionsRequest,
+    customer_data: tuple = Depends(get_current_customer),
+    db: Session = Depends(get_db_session)
+):
+    """OpenAI-compatible chat completions endpoint that uses Ollama models."""
+    customer, api_key = customer_data
+    
+    # Check budget
+    within_budget, spending, budget_limit = check_budget(customer.id, db)
+    if not within_budget:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Budget exceeded. Current spending: ${spending:.2f}, Budget: ${budget_limit:.2f}"
+        )
+    
+    # Calculate and log cost upfront
+    cost = calculate_cost(request.model, "/v1/ollama/chat/completions", db)
+    log_usage(
+        customer_id=customer.id,
+        api_key_id=api_key.id,
+        endpoint="/v1/ollama/chat/completions",
+        model=request.model,
+        cost=cost,
+        db=db,
+        metadata=json.dumps({"stream": request.stream})
+    )
+    
+    try:
+        # Convert OpenAI format to Ollama format
+        options = {}
+        if request.temperature is not None:
+            options["temperature"] = request.temperature
+        if request.max_tokens is not None:
+            options["num_predict"] = request.max_tokens
+        if request.top_p is not None:
+            options["top_p"] = request.top_p
+        
+        if request.stream:
+            # Return streaming response in OpenAI SSE format
+            async def generate_sse():
+                chat_id = f"chatcmpl-{api_key.id}-{customer.id}-{int(datetime.now(timezone.utc).timestamp())}"
+                async for chunk in chat_stream(
+                    model=request.model,
+                    messages=request.messages,
+                    options=options if options else None
+                ):
+                    try:
+                        # Parse Ollama NDJSON chunk
+                        ollama_chunk = json.loads(chunk.decode().strip())
+                        content = ollama_chunk.get("message", {}).get("content", "")
+                        done = ollama_chunk.get("done", False)
+                        
+                        # Convert to OpenAI SSE format
+                        openai_chunk = {
+                            "id": chat_id,
+                            "object": "chat.completion.chunk",
+                            "created": int(datetime.now(timezone.utc).timestamp()),
+                            "model": request.model,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"content": content} if content else {},
+                                    "finish_reason": "stop" if done else None
+                                }
+                            ]
+                        }
+                        yield f"data: {json.dumps(openai_chunk)}\n\n"
+                        
+                        if done:
+                            yield "data: [DONE]\n\n"
+                    except json.JSONDecodeError:
+                        continue
+            
+            return StreamingResponse(
+                generate_sse(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                }
+            )
+        else:
+            # Non-streaming response
+            ollama_response = await chat(
+                model=request.model,
+                messages=request.messages,
+                stream=False,
+                options=options if options else None
+            )
+            
+            # Convert non-streaming response
+            openai_response = {
+                "id": f"chatcmpl-{api_key.id}-{customer.id}",
+                "object": "chat.completion",
+                "created": int(datetime.now(timezone.utc).timestamp()),
+                "model": request.model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": ollama_response.get("message", {}).get("role", "assistant"),
+                            "content": ollama_response.get("message", {}).get("content", "")
+                        },
+                        "finish_reason": ollama_response.get("done", True) and "stop" or "length"
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": ollama_response.get("prompt_eval_count", 0),
+                    "completion_tokens": ollama_response.get("eval_count", 0),
+                    "total_tokens": (ollama_response.get("prompt_eval_count", 0) + 
+                                   ollama_response.get("eval_count", 0))
+                }
+            }
+            
+            return openai_response
+        
+    except Exception as e:
+        logger.error(f"Error in Ollama OpenAI chat completions: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
