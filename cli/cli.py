@@ -194,6 +194,9 @@ def delete_customer(customer_id: int, force: bool = False):
                 print("Deletion cancelled")
                 return
         
+        # Delete usage logs first (they have foreign key constraints)
+        db.query(UsageLog).filter(UsageLog.customer_id == customer_id).delete()
+        
         # Delete customer (cascade will handle API keys)
         db.delete(customer)
         db.commit()
