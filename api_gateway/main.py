@@ -3,11 +3,11 @@ Main FastAPI application for API Gateway.
 """
 from fastapi import FastAPI, HTTPException, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from sqlalchemy.orm import Session
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 try:
@@ -101,8 +101,207 @@ async def log_requests(request: Request, call_next):
 # Health check endpoints
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "api_gateway"}
+    """Health check endpoint with current timestamp."""
+    return {
+        "status": "healthy",
+        "service": "api_gateway",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp_local": datetime.now().isoformat()
+    }
+
+
+@app.get("/health/dashboard", response_class=HTMLResponse)
+async def health_dashboard():
+    """Health check dashboard with auto-updating time."""
+    html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>API Gateway Health Dashboard</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                margin: 0;
+                padding: 20px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+            }
+            .container {
+                background: white;
+                border-radius: 15px;
+                padding: 40px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                max-width: 600px;
+                width: 100%;
+            }
+            h1 {
+                color: #333;
+                margin-top: 0;
+                text-align: center;
+            }
+            .status {
+                text-align: center;
+                padding: 20px;
+                margin: 20px 0;
+                border-radius: 10px;
+                background: #e8f5e9;
+                border: 2px solid #4caf50;
+            }
+            .status.healthy {
+                background: #e8f5e9;
+                border-color: #4caf50;
+                color: #2e7d32;
+            }
+            .time {
+                font-size: 2.5em;
+                font-weight: bold;
+                text-align: center;
+                color: #667eea;
+                margin: 20px 0;
+                font-family: 'Courier New', monospace;
+            }
+            .time-label {
+                font-size: 0.4em;
+                color: #666;
+                font-weight: normal;
+                display: block;
+                margin-top: 10px;
+            }
+            .info {
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+            }
+            .info-item {
+                display: flex;
+                justify-content: space-between;
+                padding: 10px 0;
+                border-bottom: 1px solid #f0f0f0;
+            }
+            .info-label {
+                font-weight: bold;
+                color: #666;
+            }
+            .info-value {
+                color: #333;
+            }
+            .refresh-indicator {
+                text-align: center;
+                color: #999;
+                font-size: 0.9em;
+                margin-top: 20px;
+            }
+        </style>
+        <script>
+            // Wait for DOM to be ready
+            document.addEventListener('DOMContentLoaded', function() {
+                function updateTime() {
+                    const now = new Date();
+                    const utcTime = now.toISOString();
+                    const localTime = now.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                    });
+                    
+                    const utcElement = document.getElementById('utc-time');
+                    const localElement = document.getElementById('local-time');
+                    const timestampElement = document.getElementById('timestamp');
+                    
+                    if (utcElement) utcElement.textContent = utcTime;
+                    if (localElement) localElement.textContent = localTime;
+                    if (timestampElement) timestampElement.textContent = now.getTime();
+                }
+                
+                // Update time immediately and then every 100ms for smooth updates
+                updateTime();
+                setInterval(updateTime, 100);
+                
+                // Fetch health status every 5 seconds
+                async function fetchHealthStatus() {
+                    try {
+                        const response = await fetch('/health');
+                        const data = await response.json();
+                        const lastCheckElement = document.getElementById('last-check');
+                        if (lastCheckElement) {
+                            lastCheckElement.textContent = new Date(data.timestamp).toLocaleTimeString();
+                        }
+                        
+                        // Update status if needed
+                        const statusElement = document.querySelector('.status');
+                        if (statusElement && data.status === 'healthy') {
+                            statusElement.className = 'status healthy';
+                            statusElement.innerHTML = '<strong>Status:</strong> Healthy ✓';
+                        }
+                    } catch (error) {
+                        console.error('Health check failed:', error);
+                        const statusElement = document.querySelector('.status');
+                        if (statusElement) {
+                            statusElement.className = 'status';
+                            statusElement.style.background = '#ffebee';
+                            statusElement.style.borderColor = '#f44336';
+                            statusElement.style.color = '#c62828';
+                            statusElement.innerHTML = '<strong>Status:</strong> Error ✗';
+                        }
+                    }
+                }
+                
+                fetchHealthStatus();
+                setInterval(fetchHealthStatus, 5000);
+            });
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 API Gateway Health Dashboard</h1>
+            
+            <div class="status healthy">
+                <strong>Status:</strong> Healthy ✓
+            </div>
+            
+            <div class="time">
+                <span id="utc-time"></span>
+                <span class="time-label">UTC Time</span>
+                <span id="local-time" style="display: block; margin-top: 15px; font-size: 0.6em;"></span>
+                <span class="time-label">Local Time</span>
+            </div>
+            
+            <div class="info">
+                <div class="info-item">
+                    <span class="info-label">Service:</span>
+                    <span class="info-value">API Gateway</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value">Healthy</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Last Health Check:</span>
+                    <span class="info-value" id="last-check">Checking...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Timestamp (Unix):</span>
+                    <span class="info-value" id="timestamp"></span>
+                </div>
+            </div>
+            
+            <div class="refresh-indicator">
+                Time updates every 100ms • Health status updates every 5 seconds
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 
 @app.get("/health/ollama")
@@ -110,7 +309,12 @@ async def ollama_health_check():
     """Check Ollama connectivity."""
     is_healthy = await check_ollama_health()
     if is_healthy:
-        return {"status": "healthy", "service": "ollama"}
+        return {
+            "status": "healthy",
+            "service": "ollama",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp_local": datetime.now().isoformat()
+        }
     else:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

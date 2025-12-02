@@ -226,11 +226,14 @@ export API_KEY="sk_your_api_key_here"
 curl -H "Authorization: Bearer $API_KEY" \
   http://localhost:8001/api/models
 
-# Health check
+# Health check (includes timestamp)
 curl http://localhost:8001/health
 
-# Ollama connectivity check
+# Ollama connectivity check (includes timestamp)
 curl http://localhost:8001/health/ollama
+
+# Interactive health dashboard with auto-updating time (open in browser)
+# http://localhost:8001/health/dashboard
 ```
 
 ### Test Chat Completion

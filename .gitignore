@@ -29,6 +29,9 @@ wheels/
 *.sqlite3
 data/
 
+# Ollama Models
+ollama-models/
+
 # Environment
 .env
 .env.local

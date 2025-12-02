@@ -8,9 +8,24 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ollama_data:/root/.ollama
+      - ./ollama-models:/root/.ollama
+      - ./scripts:/scripts:ro
     environment:
       - OLLAMA_HOST=0.0.0.0:11434
+      # Maximum number of models to keep loaded in memory concurrently
+      # Default is 3 * number of GPUs (or 3 for CPU inference)
+      # Increase this value to keep more models loaded simultaneously
+      # With 4 GPUs (64GB VRAM), 6-8 models is recommended
+      - OLLAMA_MAX_LOADED_MODELS=${OLLAMA_MAX_LOADED_MODELS:-6}
+      # Keep models loaded indefinitely (negative value = forever)
+      # Default: 5m (models unload after 5 minutes of inactivity)
+      # Set to -1 or -1m to keep models loaded permanently
+      - OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:--1}
+      # Comma-separated list of models to preload on startup
+      # Example: "llama3.2:latest,qwen3-coder:30b,mistral:latest"
+      # Models will be pulled if not already available and loaded permanently
+      - OLLAMA_PRELOAD_MODELS=${OLLAMA_PRELOAD_MODELS:-}
+    entrypoint: ["/scripts/ollama-start.sh"]
     # GPU configuration - requires NVIDIA Container Toolkit
     deploy:
       resources:
@@ -73,9 +88,6 @@ services:
     # Note: Requires Cloudflare tunnel to be set up first
     # Run: ./cloudflare/setup_tunnel_cli.sh for automated setup
     # Credentials file should be at: cloudflare/credentials.json
-
-volumes:
-  ollama_data:
 
 networks:
   lmsvr_network:

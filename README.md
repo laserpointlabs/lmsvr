@@ -8,6 +8,8 @@ A production-ready API gateway for Ollama that provides API key authentication, 
 - ✅ Comprehensive CI/CD testing with Ollama's official setup
 - ✅ GPU testing and verification tools
 - ✅ Improved Docker Compose configuration
+- ✅ Automatic model preloading on startup
+- ✅ Permanent model loading (no timeout) with `OLLAMA_KEEP_ALIVE=-1`
 
 ## Features
 
@@ -19,9 +21,11 @@ A production-ready API gateway for Ollama that provides API key authentication, 
 - 🚀 GPU support for Ollama (NVIDIA)
 - 🔄 OpenAI and Claude API pass-through
 - 📈 Usage reports and exports
-- 🏥 Health check endpoints
+- 🏥 Health check endpoints with timestamps and auto-updating dashboard
 - 🧪 Comprehensive CI/CD testing
 - 🔧 GPU testing and verification tools
+- ⚡ Automatic model preloading of models into GPU memory
+- 🔄 Auto-start services on system boot (systemd integration)
 
 ## Quick Start
 
@@ -104,16 +108,43 @@ This will start:
 - API Gateway on port 8001 (mapped from container port 8000)
 - Cloudflare Tunnel container (if configured - see Cloudflare Setup section)
 
+**Quick Health Check:**
+```bash
+# JSON health endpoint (includes timestamp)
+curl http://localhost:8001/health
+
+# Interactive dashboard with auto-updating time (open in browser)
+# http://localhost:8001/health/dashboard
+```
+
 **Note:** If Cloudflare tunnel credentials (`cloudflare/credentials.json`) and config (`cloudflare/config.yml`) exist, the tunnel will start automatically with `docker compose up -d`.
 
-### 4. Pull Models
+### 4. Pull and Preload Models
+
+**Option A: Manual Model Pulling**
 
 ```bash
 docker exec -it ollama ollama pull llama3
 docker exec -it ollama ollama pull mistral
 ```
 
-Or use the CLI to list available models:
+**Option B: Automatic Model Preloading (Recommended)**
+
+Configure models to automatically load on startup by setting `OLLAMA_PRELOAD_MODELS` in your `.env` file:
+
+```bash
+OLLAMA_PRELOAD_MODELS="qwen3-coder:30b,devstral,qwen2.5-coder:1.5b-base,nomic-embed-text"
+```
+
+Models will be:
+- Automatically pulled if not already available
+- Loaded into GPU memory on container startup
+- Kept loaded permanently (due to `OLLAMA_KEEP_ALIVE=-1`)
+
+See [Model Preloading](#model-preloading) section for details.
+
+**List Available Models:**
+
 ```bash
 python cli/cli.py list-models
 ```
@@ -188,6 +219,9 @@ docker compose logs cloudflared | grep "Registered tunnel connection"
 
 # Test endpoint (after DNS propagation, usually 2-5 minutes)
 curl https://lmapi.laserpointlabs.com/health
+
+# View interactive health dashboard with auto-updating time
+# Open in browser: https://lmapi.laserpointlabs.com/health/dashboard
 ```
 
 **Note:** The default domain is `lmapi.laserpointlabs.com`. You can change this by:
@@ -242,8 +276,9 @@ curl -H "Authorization: Bearer sk_your_api_key_here" \
 
 ### Health Checks
 
-- `GET /health` - API Gateway health
-- `GET /health/ollama` - Ollama connectivity
+- `GET /health` - API Gateway health (includes current timestamp)
+- `GET /health/ollama` - Ollama connectivity (includes current timestamp)
+- `GET /health/dashboard` - Interactive health dashboard with auto-updating time (HTML)
 
 ## CLI Commands
 
@@ -296,8 +331,11 @@ cp .env.example .env
 - `ANTHROPIC_API_KEY` - For Claude pass-through endpoints (`/v1/messages`)
 - `LOG_LEVEL` - Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` (default: `INFO`)
 - `CLOUDFLARE_TUNNEL_URL` - Public URL for the API Gateway via Cloudflare Tunnel (default: `https://lmapi.laserpointlabs.com`)
+- `OLLAMA_MAX_LOADED_MODELS` - Maximum number of models to keep loaded in memory concurrently (default: `6`). Increase this value if you want to keep more models loaded simultaneously. Default is 3 * number of GPUs (or 3 for CPU inference). With 4 GPUs (64GB VRAM), 6-8 models is recommended.
+- `OLLAMA_KEEP_ALIVE` - Duration to keep models loaded in memory (default: `-1` = forever). Set to `-1` or `-1m` to keep models loaded indefinitely, preventing automatic unloading. Default behavior without this setting is 5 minutes of inactivity before unloading.
+- `OLLAMA_PRELOAD_MODELS` - Comma-separated list of models to automatically load on Ollama startup (default: empty). Models will be pulled if not available and loaded permanently. Example: `"llama3.2:latest,qwen3-coder:30b,mistral:latest"`. Leave empty to skip automatic loading.
   
-  **Note:** This value is used to update `cloudflare/config.yml`. After changing it in `.env`, run:
+  **Note:** The `CLOUDFLARE_TUNNEL_URL` value is used to update `cloudflare/config.yml`. After changing it in `.env`, run:
   ```bash
   ./cloudflare/update_config_from_env.sh
   docker compose restart cloudflared
@@ -315,16 +353,69 @@ The SQLite database is stored in `data/lmsvr.db` and contains:
 
 ## Model Management
 
+### Model Preloading
+
+The system supports automatic model preloading on container startup. Models specified in `OLLAMA_PRELOAD_MODELS` will be automatically loaded into GPU memory and kept loaded permanently.
+
+**Configuration:**
+
+Add models to your `.env` file:
+
+```bash
+# Comma-separated list of models to preload
+OLLAMA_PRELOAD_MODELS="qwen3-coder:30b,devstral,qwen2.5-coder:1.5b-base,nomic-embed-text"
+```
+
+**How It Works:**
+
+1. On container startup, the `ollama-start.sh` script runs automatically
+2. Script waits for Ollama service to be ready
+3. For each model in `OLLAMA_PRELOAD_MODELS`:
+   - Checks if model exists locally
+   - Pulls model if not found
+   - Loads model into GPU memory
+   - Keeps model loaded permanently (via `OLLAMA_KEEP_ALIVE=-1`)
+
+**Model Loading Behavior:**
+
+- **Regular Models** (chat, code, etc.): Loaded via `ollama run` and appear in `ollama ps` with "Forever" status
+- **Embedding Models**: 
+  - Cannot be loaded via `ollama run` (they don't support the generate API)
+  - Automatically loaded via `/api/embeddings` endpoint by the startup script
+  - Once loaded, appear in `ollama ps` with "Forever" status
+  - Stay loaded in GPU memory permanently (Note: Embedding models require the embeddings API endpoint, not the generate API. This is handled automatically by the startup script.
+
+**Verify Loaded Models:**
+
+```bash
+# Check which models are currently loaded in GPU memory
+docker exec ollama ollama ps
+
+# Check GPU memory usage
+docker exec ollama nvidia-smi
+```
+
+**Environment Variables:**
+
+- `OLLAMA_PRELOAD_MODELS`: Comma-separated list of models to preload (e.g., `"model1,model2,model3"`)
+- `OLLAMA_KEEP_ALIVE`: Set to `-1` to keep models loaded forever (default: `-1`)
+- `OLLAMA_MAX_LOADED_MODELS`: Maximum number of models to keep loaded simultaneously (default: `6` for 4 GPUs)
+
+**For detailed information, see:** [Model Preloading Guide](docs/MODEL_PRELOADING.md)
+
 ### Using Ollama Commands
 
-Models are managed manually using Ollama's native commands:
+Models can also be managed manually using Ollama's native commands:
 
 ```bash
 # Pull a model
 docker exec -it ollama ollama pull llama3
 
-# List models
+# List available models
 docker exec -it ollama ollama list
+
+# Check loaded models (in GPU memory)
+docker exec -it ollama ollama ps
 
 # Remove a model
 docker exec -it ollama ollama rm llama3
@@ -377,6 +468,19 @@ External API costs (OpenAI/Claude) are calculated based on token usage and curre
 - HTTPS provided via Cloudflare Tunnel
 - Request logging for audit trail
 - Budget limits prevent over-spending
+
+## Auto-Start on Boot
+
+To configure Docker Compose services to automatically start on system boot (without requiring login), see the [Auto-Start Guide](docs/AUTO_START.md).
+
+Quick setup:
+```bash
+# Copy service file and enable
+sudo cp lmsvr-docker-compose.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable lmsvr-docker-compose.service
+sudo systemctl start lmsvr-docker-compose.service
+```
 
 ## Troubleshooting
 
