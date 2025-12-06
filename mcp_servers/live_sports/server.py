@@ -89,7 +89,7 @@ async def get_odds(sport: str, team: str, region: str = "us", markets: str = "h2
                 away = game.get('away_team')
                 time = game.get('commence_time')
 
-                output += f"GAME {game_idx}: {away} @ {home}\n"
+                output += f"GAME {game_idx}: {away} @ {home} (ID: {game['id']})\n"
                 output += f"Time: {time}\n\n"
 
                 bookmakers = game.get('bookmakers', [])[:2]
@@ -171,7 +171,7 @@ async def get_weekend_slate(sport: str = "americanfootball_nfl", region: str = "
                 except:
                     time_str = time
 
-                output += f"GAME {game_idx}: {away} @ {home}\n"
+                output += f"GAME {game_idx}: {away} @ {home} (ID: {game['id']})\n"
                 output += f"Kickoff: {time_str}\n"
 
                 # Get consensus line from first bookmaker
@@ -410,6 +410,79 @@ async def find_teaser_candidates(sport: str = "americanfootball_nfl") -> str:
 
         except Exception as e:
             return f"Error finding teaser candidates: {str(e)}"
+
+
+@mcp.tool()
+async def get_player_props(sport: str, game_id: str, markets: str) -> str:
+    """
+    Get player props for a specific game from The Odds API.
+
+    Args:
+        sport: Sport key (e.g. 'americanfootball_nfl')
+        game_id: The game ID found in get_odds or get_weekend_slate output
+        markets: Comma-separated markets (e.g. 'player_pass_yds,player_rush_yds,player_anytime_td')
+    """
+    if not API_KEY:
+        return "ERROR: ODDS_API_KEY not set."
+
+    async with httpx.AsyncClient() as client:
+        try:
+            url = f"{BASE_URL}/{sport}/events/{game_id}/odds"
+            params = {
+                "apiKey": API_KEY,
+                "regions": "us",
+                "markets": markets,
+                "oddsFormat": "american"
+            }
+
+            resp = await client.get(url, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+
+            bookmakers = data.get('bookmakers', [])
+            if not bookmakers:
+                return f"No props found for game {game_id}."
+
+            output = f"[PLAYER PROPS for {data.get('away_team')} @ {data.get('home_team')}]\n"
+            output += f"Markets: {markets}\n"
+            output += "=" * 50 + "\n\n"
+
+            # Aggregate props by player/market
+            # Use DraftKings or FanDuel as primary
+            preferred_books = ['DraftKings', 'FanDuel', 'Caesars']
+            selected_book = None
+
+            for book_name in preferred_books:
+                for b in bookmakers:
+                    if b['title'] == book_name:
+                        selected_book = b
+                        break
+                if selected_book: break
+
+            if not selected_book:
+                selected_book = bookmakers[0]
+
+            output += f"Book: {selected_book['title']}\n\n"
+
+            for market in selected_book['markets']:
+                key = market['key']
+                output += f"--- {key} ---\n"
+                for outcome in market['outcomes']:
+                    name = outcome.get('description', outcome.get('name')) # Player name usually in description for props
+                    bet_type = outcome.get('name') # Over/Under
+                    point = outcome.get('point')
+                    price = outcome.get('price')
+
+                    if point:
+                        output += f"{name} ({bet_type} {point}): {price:+d}\n"
+                    else:
+                        output += f"{name} ({bet_type}): {price:+d}\n"
+                output += "\n"
+
+            return output
+
+        except Exception as e:
+            return f"Error fetching props: {str(e)}"
 
 
 @mcp.tool()

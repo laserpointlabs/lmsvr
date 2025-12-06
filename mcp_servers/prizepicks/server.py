@@ -1,129 +1,122 @@
 from mcp.server.fastmcp import FastMCP
-import httpx
 import json
+import os
+from pathlib import Path
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
-import asyncio
+from datetime import datetime
 
 # Initialize FastMCP server
 mcp = FastMCP("PrizePicksData")
 
-# Cache configuration
-CACHE_DURATION = 300  # 5 minutes in seconds
-cache = {
-    "projections": None,
-    "last_updated": None
-}
+# Data location
+DATA_DIR = Path(__file__).parent / "data"
+PROJECTIONS_FILE = DATA_DIR / "projections.json"
 
-# PrizePicks Internal API (Reverse Engineered)
-# DISCLAIMER: This uses PrizePicks' internal API which may violate their Terms of Use.
-# Use at your own risk. Consider using a third-party data provider for production.
-BASE_URL = "https://api.prizepicks.com"
-
-async def fetch_projections_from_api() -> List[Dict[str, Any]]:
-    """Fetch player projections from PrizePicks internal API."""
-    async with httpx.AsyncClient() as client:
+def load_projections() -> Dict[str, Any]:
+    """Load projections from the local JSON file uploaded by the client."""
+    if PROJECTIONS_FILE.exists():
         try:
-            # Fetch projections (this endpoint returns all active player props)
-            resp = await client.get(
-                f"{BASE_URL}/projections",
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "application/json"
-                },
-                timeout=15.0
-            )
-
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("data", [])
-            else:
-                return []
+            with open(PROJECTIONS_FILE, 'r') as f:
+                return json.load(f)
         except Exception as e:
-            return []
-
-async def get_cached_projections() -> List[Dict[str, Any]]:
-    """Get projections from cache or fetch fresh if expired."""
-    global cache
-
-    now = datetime.now()
-
-    # Check if cache is valid
-    if cache["projections"] and cache["last_updated"]:
-        age = (now - cache["last_updated"]).total_seconds()
-        if age < CACHE_DURATION:
-            return cache["projections"]
-
-    # Fetch fresh data
-    projections = await fetch_projections_from_api()
-    cache["projections"] = projections
-    cache["last_updated"] = now
-
-    return projections
+            print(f"Error loading projections file: {e}")
+    return {}
 
 @mcp.tool()
 async def get_prizepicks_props(sport: str = "NFL", player_name: str = None, stat_type: str = None) -> str:
     """
-    Get PrizePicks player props for NFL or NCAAF. Updated every 5 minutes.
+    Get PrizePicks player props from crowdsourced data.
 
     Args:
-        sport: Sport filter (NFL, NCAAF). Default NFL.
-        player_name: Optional player name to filter (e.g., 'Patrick Mahomes', 'Jalen Hurts')
-        stat_type: Optional stat type (e.g., 'Passing Yards', 'Rushing Yards', 'Receptions')
+        sport: Sport name (e.g., "NBA", "NFL", "CFB", "CBB", "NHL").
+        player_name: Filter by player name.
+        stat_type: Filter by stat (e.g. "Points", "Rebounds").
     """
-    projections = await get_cached_projections()
+    data = load_projections()
+    if not data:
+        return "No PrizePicks data available. Please ensure the frontend app is open to sync data."
 
-    if not projections:
-        return "Unable to fetch PrizePicks data at this time. The service may be unavailable or blocking requests."
+    # Parse data
+    raw_projections = data.get('data', [])
+    included = data.get('included', [])
 
-    # Filter by sport
+    # Build lookups
+    leagues = {x['id']: x['attributes']['name'] for x in included if x['type'] == 'league'}
+    players = {x['id']: x['attributes']['name'] for x in included if x['type'] == 'new_player'}
+
+    # Normalize sport input
     sport_upper = sport.upper()
-    filtered = [p for p in projections if p.get("league_name", "").upper() == sport_upper]
+    sport_map = {"NCAAF": "CFB", "NCAAB": "CBB", "NCAAM": "CBB"}
+    target_sport = sport_map.get(sport_upper, sport_upper)
 
-    # Filter by player if specified
-    if player_name:
-        player_lower = player_name.lower()
-        filtered = [p for p in filtered if player_lower in p.get("description", "").lower()]
+    filtered_props = []
 
-    # Filter by stat type if specified
-    if stat_type:
-        stat_lower = stat_type.lower()
-        filtered = [p for p in filtered if stat_lower in p.get("stat_type", "").lower()]
+    for p in raw_projections:
+        attrs = p.get('attributes', {})
+        rels = p.get('relationships', {})
 
-    if not filtered:
-        return f"No PrizePicks props found for {sport}" + (f" player: {player_name}" if player_name else "") + (f" stat: {stat_type}" if stat_type else "")
+        # Get League
+        league_id = rels.get('league', {}).get('data', {}).get('id')
+        league_name = leagues.get(league_id, "Unknown")
 
-    # Format output
-    cache_age = (datetime.now() - cache["last_updated"]).total_seconds() if cache["last_updated"] else 0
-    output = f"[PRIZEPICKS PROPS - Updated {int(cache_age)}s ago]\n\n"
+        if league_name != target_sport:
+            continue
+
+        # Get Player
+        player_id = rels.get('new_player', {}).get('data', {}).get('id')
+        p_name = players.get(player_id, "Unknown Player")
+
+        # Filters
+        if player_name and player_name.lower() not in p_name.lower():
+            continue
+
+        stat = attrs.get('stat_type', 'Unknown')
+        if stat_type and stat_type.lower() not in stat.lower():
+            continue
+
+        filtered_props.append({
+            'player': p_name,
+            'stat': stat,
+            'line': attrs.get('line_score'),
+            'type': attrs.get('board_time'), # Use as indicator
+            'desc': attrs.get('description')
+        })
+
+    if not filtered_props:
+        return f"No props found for {target_sport} matching your criteria."
+
+    # Format Output
+    output = f"[PRIZEPICKS PROPS - {target_sport}]\n"
+    output += f"Found {len(filtered_props)} props.\n"
+    output += "=" * 50 + "\n\n"
 
     # Group by player
     by_player = {}
-    for proj in filtered[:30]:  # Limit to 30 props
-        player = proj.get("description", "Unknown")
-        if player not in by_player:
-            by_player[player] = []
-        by_player[player].append(proj)
+    for p in filtered_props:
+        if p['player'] not in by_player:
+            by_player[p['player']] = []
+        by_player[p['player']].append(p)
 
-    for player, props in list(by_player.items())[:15]:  # Max 15 players
+    count = 0
+    for player, props in by_player.items():
         output += f"**{player}**\n"
-        for prop in props[:3]:  # Max 3 props per player
-            stat = prop.get("stat_type", "Unknown")
-            line = prop.get("line_score", "N/A")
-            output += f"  - {stat}: {line}\n"
+        for prop in props:
+            output += f"  - {prop['stat']}: {prop['line']}\n"
         output += "\n"
+        count += 1
+        if count >= 20: # Limit output size
+            output += "... (more players hidden) ...\n"
+            break
 
     return output.strip()
 
 @mcp.tool()
 def prizepicks_strategy() -> Dict[str, str]:
-    """Get tips for building PrizePicks lineups and prop betting strategy."""
+    """Get tips for building PrizePicks lineups."""
     return {
-        "Correlation": "Stack QB + their WR for correlated props (if QB has big game, WR likely does too)",
-        "Leverage": "In tournaments, take contrarian props (low ownership) for higher upside",
-        "Variance": "Player props have HIGHER variance than game spreads. Expect more volatility.",
-        "Overs vs Unders": "PrizePicks lines are sharp. Don't blindly take all overs or all unders.",
-        "Research": "Check injury reports, weather, matchups before locking in props"
+        "Correlation": "Stack QB + WR (Over/Over). Or QB Over / WR Under (if spreading usage).",
+        "Defense": "Target props against weak defenses (use get_team_stats to check).",
+        "Blowout Risk": "Avoid Overs for stars in games with massive spreads (bench risk)."
     }
 
 if __name__ == "__main__":

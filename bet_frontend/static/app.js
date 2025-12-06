@@ -700,7 +700,7 @@ async function triggerAlertCheck() {
 
 // Start polling for alerts
 function startAlertsPolling() {
-    // Poll every 60 seconds
+    // Poll every 15 seconds
     if (alertsPollingInterval) {
         clearInterval(alertsPollingInterval);
     }

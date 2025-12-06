@@ -95,13 +95,15 @@ async def monitor_lines_loop():
     except Exception as e:
         logger.error(f"Failed to refresh tools: {e}")
 
+    loop_count = 0
     try:
         while True:
+            loop_count += 1
             try:
-                logger.info("Running scheduled line movement check...")
+                logger.info(f"Running scheduled check (Cycle {loop_count})...")
 
                 for sport in sports_to_monitor:
-                    logger.info(f"Checking {sport}...")
+                    # ... existing line checks ...
 
                     # 1. Check if we have opening lines (baseline) for this sport
                     from pathlib import Path
@@ -119,21 +121,40 @@ async def monitor_lines_loop():
 
                     if not has_opening:
                         logger.info(f"No opening lines found for {sport}. Taking initial snapshot...")
-                        result = await mcp_manager.execute_tool("get_opening_lines", {
+                        await mcp_manager.execute_tool("get_opening_lines", {
                             "sport": sport,
                             "hours_ago": 48
                         })
-                        logger.info(f"Snapshot result ({sport}): {result}")
 
                     # 2. Check for line movements (compare to opening)
-                    result = await mcp_manager.execute_tool("compare_to_opening", {"sport": sport})
-                    logger.info(f"Line movement check ({sport}): {result}")
+                    await mcp_manager.execute_tool("compare_to_opening", {"sport": sport})
 
                     # 3. Check for steam moves (last 30 min)
-                    result = await mcp_manager.execute_tool("detect_steam_moves", {"sport": sport})
-                    logger.info(f"Steam check ({sport}): {result}")
+                    await mcp_manager.execute_tool("detect_steam_moves", {"sport": sport})
 
-                # 4. Force cleanup of old alerts
+                    # 4. Check Props (Every 30 mins / 6th cycle)
+                    if loop_count % 6 == 0:
+                        logger.info(f"Running Prop Check for {sport}...")
+                        # Initialize baseline if needed
+                        opening_props_file = Path("/mcp_servers/betting_monitor/data/opening_props.json")
+                        has_props = False
+                        if opening_props_file.exists():
+                            try:
+                                data = json.load(open(opening_props_file))
+                                if sport in data:
+                                    has_props = True
+                            except:
+                                pass
+
+                        if not has_props:
+                            logger.info(f"Taking props snapshot for {sport}...")
+                            await mcp_manager.execute_tool("snapshot_props", {"sport": sport})
+                        else:
+                            # Compare
+                            result = await mcp_manager.execute_tool("compare_props", {"sport": sport})
+                            logger.info(f"Prop check ({sport}): {result}")
+
+                # 5. Force cleanup of old alerts
                 await mcp_manager.execute_tool("get_recent_alerts", {"limit": 1})
                 logger.info("Alert cleanup routine executed.")
 
@@ -168,7 +189,11 @@ async def shutdown_event():
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://bet.laserpointlabs.com",
+        "http://localhost:8002",
+        "http://127.0.0.1:8002"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -779,6 +804,11 @@ AVAILABLE TOOLS
   • Use for: Detecting steam moves, RLM patterns, key number traps
   • Example: get_sharp_action_indicators(sport="americanfootball_nfl")
 
+**get_player_props(sport, game_id, markets)** - Fetch player prop lines
+  • Use for: Specific player bets (passing yards, TDs, strikeouts)
+  • Requires: game_id from get_odds output
+  • Example: get_player_props(sport="nfl", game_id="...", markets="player_pass_yds")
+
 **get_game_weather(home_team, game_time_iso)** - Stadium weather forecast
   • Use for: Checking wind/rain impact on Totals (Over/Under)
   • Example: get_game_weather(home_team="Bills")
@@ -900,8 +930,11 @@ FOR STRATEGY QUESTIONS ("How do teasers work?"):
 → DO NOT call get_odds()
 
 FOR PROPS/PRIZEPICKS QUESTIONS:
-→ Use search_guides("player props") or read_guide("player_props_strategy.md")
-→ Explain correlation, matchup adjustments, game script impact"""
+1. Call get_odds(sport, team) to get the GAME ID
+2. Call get_player_props(sport, game_id, markets)
+   - Markets: player_pass_yds, player_rush_yds, player_receptions, player_points (NBA), etc.
+3. Call search_guides("player props") for strategy
+4. Explain correlation and value based on the lines returned"""
         }
         messages_with_system.insert(0, system_message)
 
@@ -1463,19 +1496,36 @@ async def trigger_alert_check(
     customer_data: tuple = Depends(get_current_customer)
 ):
     """
-    Trigger a manual check for line movements and steam moves.
+    Trigger a manual check for line movements, steam moves, and props across all sports.
     This calls the betting_monitor MCP tools.
     """
     try:
         results = {}
 
-        # Check for line movements (compare to opening)
-        movement_result = await mcp_manager.execute_tool("compare_to_opening", {"sport": "americanfootball_nfl"})
-        results["line_movements"] = movement_result
+        sports_to_monitor = [
+            "americanfootball_nfl",
+            "americanfootball_ncaaf",
+            "basketball_nba",
+            "basketball_ncaab",
+            "baseball_mlb"
+        ]
 
-        # Check for steam moves (last 30 min)
-        steam_result = await mcp_manager.execute_tool("detect_steam_moves", {"sport": "americanfootball_nfl"})
-        results["steam_moves"] = steam_result
+        for sport in sports_to_monitor:
+            # Check for line movements
+            movement_result = await mcp_manager.execute_tool("compare_to_opening", {"sport": sport})
+            results[f"{sport}_movements"] = movement_result
+
+            # Check for steam moves
+            steam_result = await mcp_manager.execute_tool("detect_steam_moves", {"sport": sport})
+            results[f"{sport}_steam"] = steam_result
+
+            # Check Props (if baseline exists)
+            try:
+                # Just try comparing props, if no baseline it returns message
+                prop_result = await mcp_manager.execute_tool("compare_props", {"sport": sport})
+                results[f"{sport}_props"] = prop_result
+            except:
+                pass
 
         # Force cleanup
         await mcp_manager.execute_tool("get_recent_alerts", {"limit": 1})
@@ -1512,6 +1562,32 @@ async def take_opening_snapshot(
         }
     except Exception as e:
         logger.error(f"Error taking snapshot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/data/prizepicks")
+async def upload_prizepicks_data(
+    request: Request,
+    customer_data: tuple = Depends(get_current_customer)
+):
+    """Receive PrizePicks data from frontend (client-side fetching)."""
+    try:
+        data = await request.json()
+
+        # Save to file
+        from pathlib import Path
+        # Note: mounted volume is /mcp_servers inside container
+        file_path = Path("/mcp_servers/prizepicks/data/projections.json")
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(file_path, "w") as f:
+            json.dump(data, f)
+
+        logger.info(f"PrizePicks data updated by client. Size: {len(str(data))} bytes")
+
+        return {"status": "success", "message": "Data received"}
+    except Exception as e:
+        logger.error(f"Error saving PrizePicks data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -31,12 +31,14 @@ ALERT_TTL_MINUTES = int(os.getenv("ALERT_TTL_MINUTES", 60))
 # Alert storage
 ALERTS_FILE = DATA_DIR / "alerts.json"
 OPENING_LINES_FILE = DATA_DIR / "opening_lines.json"
+OPENING_PROPS_FILE = DATA_DIR / "opening_props.json"
 
 # Thresholds for alerts (can be tuned per sport if needed)
 SPREAD_MOVE_THRESHOLD = 1.0  # Points
 TOTAL_MOVE_THRESHOLD = 1.5   # Points
 ML_MOVE_THRESHOLD = 25       # American odds points
 STEAM_MOVE_THRESHOLD = 1.5   # Points in < 30 min = steam
+PROP_MOVE_THRESHOLD = 2.0    # Points/Yards for props
 
 
 def load_json_file(filepath: Path) -> Dict:
@@ -633,6 +635,197 @@ async def detect_steam_moves(sport: str = "americanfootball_nfl") -> str:
 
         except Exception as e:
             return f"Error detecting steam: {str(e)}"
+
+
+@mcp.tool()
+async def snapshot_props(sport: str = "americanfootball_nfl", limit_games: int = 10) -> str:
+    """
+    [PROPS SNAPSHOT] Save current player props as baseline.
+    Limits based on sport priority (NFL gets more coverage).
+    """
+    if not API_KEY:
+        return "ERROR: ODDS_API_KEY not set."
+
+    # Smart limits based on sport importance/volume
+    if "nfl" in sport:
+        limit_games = 16 # Cover full slate
+    elif "ncaaf" in sport:
+        limit_games = 10 # Top matchups
+    elif "nba" in sport:
+        limit_games = 5  # Key games
+    else:
+        limit_games = 3  # Others
+
+    # Determine key markets based on sport
+    markets = "player_points" # Default
+    if "nfl" in sport or "ncaaf" in sport:
+        markets = "player_pass_yds,player_rush_yds"
+    elif "nba" in sport or "ncaab" in sport:
+        markets = "player_points,player_rebounds,player_assists"
+    elif "mlb" in sport:
+        markets = "pitcher_strikeouts"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            # 1. Get upcoming games first
+            url = f"{BASE_URL}/sports/{sport}/events"
+            resp = await client.get(url, params={"apiKey": API_KEY, "commenceTimeFrom": datetime.now(timezone.utc).isoformat()})
+
+            if resp.status_code != 200:
+                return f"Error fetching events: {resp.status_code}"
+
+            events = resp.json()
+            # Sort by time and take next few
+            events.sort(key=lambda x: x.get('commence_time'))
+            target_events = events[:limit_games]
+
+            if not target_events:
+                return f"No upcoming games found for {sport}."
+
+            # 2. Fetch props for each event
+            props_data = {}
+            count = 0
+
+            for event in target_events:
+                game_id = event['id']
+                matchup = f"{event['away_team']} @ {event['home_team']}"
+
+                odds_resp = await client.get(
+                    f"{BASE_URL}/sports/{sport}/events/{game_id}/odds",
+                    params={"apiKey": API_KEY, "regions": "us", "markets": markets, "oddsFormat": "american"}
+                )
+
+                if odds_resp.status_code == 200:
+                    data = odds_resp.json()
+                    bookmakers = data.get('bookmakers', [])
+                    if bookmakers:
+                        # Use first bookmaker (consensus/market leader)
+                        bookie = bookmakers[0]
+
+                        game_props = {}
+                        for market in bookie['markets']:
+                            market_key = market['key']
+                            for outcome in market['outcomes']:
+                                # Key: Player Name + Market (e.g. "Patrick Mahomes_player_pass_yds")
+                                # Use description or name
+                                player = outcome.get('description', outcome.get('name'))
+                                point = outcome.get('point')
+                                if point:
+                                    key = f"{player}_{market_key}"
+                                    game_props[key] = {
+                                        'player': player,
+                                        'market': market_key,
+                                        'line': point,
+                                        'odds': outcome.get('price')
+                                    }
+
+                        props_data[game_id] = {
+                            'matchup': matchup,
+                            'props': game_props
+                        }
+                        count += len(game_props)
+
+            # Save to file
+            all_props = load_json_file(OPENING_PROPS_FILE)
+            all_props[sport] = {
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'games': props_data
+            }
+            save_json_file(OPENING_PROPS_FILE, all_props)
+
+            return f"[PROPS SNAPSHOT - {sport}]\nTracked {len(props_data)} games, {count} prop lines."
+
+        except Exception as e:
+            return f"Error snapshotting props: {str(e)}"
+
+
+@mcp.tool()
+async def compare_props(sport: str = "americanfootball_nfl") -> str:
+    """
+    [PROP MOVEMENT] Compare current props to baseline.
+    """
+    if not API_KEY:
+        return "ERROR: ODDS_API_KEY not set."
+
+    all_props = load_json_file(OPENING_PROPS_FILE)
+    sport_data = all_props.get(sport)
+
+    if not sport_data:
+        return f"No baseline props found for {sport}. Run snapshot_props first."
+
+    opening_games = sport_data.get('games', {})
+    timestamp = sport_data.get('timestamp')
+
+    # Determine key markets (same logic)
+    markets = "player_points"
+    if "nfl" in sport or "ncaaf" in sport:
+        markets = "player_pass_yds,player_rush_yds"
+    elif "nba" in sport or "ncaab" in sport:
+        markets = "player_points,player_rebounds,player_assists"
+    elif "mlb" in sport:
+        markets = "pitcher_strikeouts"
+
+    movements = []
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for game_id, game_data in opening_games.items():
+            try:
+                # Fetch current
+                odds_resp = await client.get(
+                    f"{BASE_URL}/sports/{sport}/events/{game_id}/odds",
+                    params={"apiKey": API_KEY, "regions": "us", "markets": markets, "oddsFormat": "american"}
+                )
+
+                if odds_resp.status_code != 200: continue
+
+                data = odds_resp.json()
+                bookmakers = data.get('bookmakers', [])
+                if not bookmakers: continue
+
+                bookie = bookmakers[0]
+                opening_props = game_data.get('props', {})
+
+                for market in bookie['markets']:
+                    market_key = market['key']
+                    for outcome in market['outcomes']:
+                        player = outcome.get('description', outcome.get('name'))
+                        point = outcome.get('point')
+                        if not point: continue
+
+                        key = f"{player}_{market_key}"
+                        if key in opening_props:
+                            open_line = opening_props[key]['line']
+                            diff = point - open_line
+
+                            if abs(diff) >= PROP_MOVE_THRESHOLD:
+                                move_str = f"{player} {market_key}: {open_line} -> {point} ({diff:+.1f})"
+                                movements.append({
+                                    'game': game_data['matchup'],
+                                    'desc': move_str,
+                                    'significance': 'HIGH' if abs(diff) >= 3 else 'MEDIUM'
+                                })
+
+                                # Save alert
+                                save_alert({
+                                    'type': 'PROP_MOVE',
+                                    'game_id': game_id,
+                                    'game': game_data['matchup'],
+                                    'movement': move_str,
+                                    'significance': 'HIGH' if abs(diff) >= 3 else 'MEDIUM',
+                                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                                    'sport': sport
+                                })
+            except:
+                continue
+
+    if not movements:
+        return f"[PROP CHECK - {sport}]\nNo significant prop movements vs {timestamp}."
+
+    output = f"[🚨 PROP ALERTS - {sport}]\n"
+    for m in movements:
+        output += f"⚡ {m['game']}: {m['desc']}\n"
+
+    return output
 
 
 @mcp.tool()

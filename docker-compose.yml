@@ -69,7 +69,9 @@ services:
       # Get your free key from https://the-odds-api.com/
       - ODDS_API_KEY=${ODDS_API_KEY}
       # Time to clear alerts (in minutes)
-      - ALERT_TTL_MINUTES=${ALERT_TTL_MINUTES:-5}
+      - ALERT_TTL_MINUTES=${ALERT_TTL_MINUTES:-60}
+      # Prop Check Interval (in minutes)
+      - PROP_CHECK_INTERVAL=${PROP_CHECK_INTERVAL:-15}
       # OpenAI Key
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
@@ -107,9 +109,14 @@ services:
     volumes:
       - ./cloudflare/config.yml:/etc/cloudflared/config.yml:ro
       - ./cloudflare/credentials.json:/etc/cloudflared/credentials.json:ro
-    # Note: Requires Cloudflare tunnel to be set up first
-    # Run: ./cloudflare/setup_tunnel_cli.sh for automated setup
-    # Credentials file should be at: cloudflare/credentials.json
+
+  selenium:
+    image: selenium/standalone-chrome:latest
+    container_name: selenium
+    shm_size: 2gb
+    restart: unless-stopped
+    networks:
+      - lmsvr_network
 
 networks:
   lmsvr_network:
