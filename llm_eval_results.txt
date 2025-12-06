@@ -1,0 +1,106 @@
+
+################################################################################
+# Live Odds
+################################################################################
+
+[1/6] What are the current odds for the Chiefs game?
+  ❌ POOR | Confidence: 0% | Time: 3.1s
+  Reason: Failed to parse evaluation
+  Answer: The current moneyline odds for the Chiefs game are +150. The point spread is set at -3.5 with odds of -110 on both sides. The total points line stands...
+
+[2/6] Who is favored in the Bills vs Dolphins game?
+  ✓ GOOD | Confidence: 95% | Time: 2.6s
+  Reason: The Buffalo Bills are favored in the upcoming game against the Cincinnati Bengals with odds of -270.
+  Answer: The Buffalo Bills are favored in the upcoming game against the Cincinnati Bengals with odds of -270. The Cincinnati Bengals have odds of +220 as the u...
+
+[3/6] What's the spread on the 49ers game?
+  ❌ POOR | Confidence: 0% | Time: 2.9s
+  Reason: Failed to parse evaluation
+  Answer: The current spread for the San Francisco 49ers game is -12.5 at DraftKings with odds of -110. The Tennessee Titans are +12.5 at -110. This means both ...
+
+[4/6] Show me the over/under for the Cowboys vs Eagles game.
+  ✓ GOOD | Confidence: 95% | Time: 3.3s
+  Reason: The over/under total for the Cowboys vs Eagles game is 47 points. The odds are set at -110/-105 acro
+  Answer: The over/under total for the Cowboys vs Eagles game is 47.5 points. The odds are set at -110/-105 across different betting books like DraftKings and F...
+
+[5/6] What are the moneyline odds for all Sunday afternoon games?
+  ❌ POOR | Confidence: 0% | Time: 3.5s
+  Reason: Failed to parse evaluation
+  Answer: Here are the moneyline odds for all Sunday afternoon American Football games:
+
+1. **Kansas City Chiefs** vs **Las Vegas Raiders**  
+   Moneyline: Chie...
+
+[6/6] What are the odds for Alabama's next game?
+  ❌ POOR | Confidence: 0% | Time: 3.4s
+  Reason: Failed to parse evaluation
+  Answer: The current odds for Alabama's next game against Georgia are:
+
+**Home (Alabama): +110**
+**Away (Georgia): -130**
+
+Additional totals and point spread l...
+
+
+################################################################################
+# Strategy
+################################################################################
+
+[1/5] I have a $1000 bankroll. How much should I bet per game?
+  ❌ POOR | Confidence: 0% | Time: 3.4s
+  Reason: Failed to parse evaluation
+  Answer: Based on the current bankroll management guide (bankroll_management.md), it is recommended to bet **1 unit per game** when your total bankroll is $100...
+
+[2/5] What's the Kelly Criterion and should I use it?
+  ❌ POOR | Confidence: 0% | Time: 6.7s
+  Reason: Failed to parse evaluation
+  Answer: The Kelly Criterion is a mathematical formula used to calculate the optimal bet size for each wager based on your edge over the sportsbook and the odd...
+
+[3/5] I'm down $200 this week. Should I increase my bet size to win it back?
+  ❌ POOR | Confidence: 0% | Time: 3.1s
+  Reason: Failed to parse evaluation
+  Answer: Based on the bankroll management guide, it is strongly advised **never** to risk more than 1% of your total bankroll on a single bet. With a $200 loss...
+
+[4/5] What's the difference between flat betting and variable betting?
+  ❌ POOR | Confidence: 0% | Time: 4.5s
+  Reason: Failed to parse evaluation
+  Answer: Flat betting and variable betting are two distinct strategies in sports betting that differ primarily in how consistently they wager amounts:
+
+1. **Fl...
+
+[5/5] Why is 3 such an important number in NFL betting?
+  ❌ POOR | Confidence: 0% | Time: 6.1s
+  Reason: Failed to parse evaluation
+  Answer: In NFL betting, the number 3 is crucial due to its significance in the scoring system and common game outcomes:
+
+1. **Scoring System**: In American fo...
+
+
+################################################################################
+# Multi-Part
+################################################################################
+
+[1/2] I want to bet on the Chiefs -7. Explain the risks and suggest a bet size for a $500 bankroll.
+  ❌ POOR | Confidence: 0% | Time: 3.8s
+  Reason: Failed to parse evaluation
+  Answer: The Chiefs are favored by 7 points against the Bengals. This means they must win by at least 8 points for bets on them to cover.
+
+For a $500 bankroll,...
+
+[2/2] Compare the Saints spread vs their moneyline. Which is better value?
+  ❌ POOR | Confidence: 0% | Time: 4.7s
+  Reason: Failed to parse evaluation
+  Answer: Based on the current odds for the New Orleans Saints at DraftKings:
+
+- **Moneyline**: +330 (They are the underdog)
+- **Spread**: +8.5 (-112) 
+
+The mon...
+
+================================================================================
+FINAL SUMMARY - granite4:3b
+================================================================================
+Total Questions: 13
+✓ High Confidence (≥80%): 2/13 (15.4%)
+📊 Avg Confidence Score: 14.6%
+⚡ Avg Response Time: 3.9s

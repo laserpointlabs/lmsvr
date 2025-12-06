@@ -11,11 +11,18 @@ from datetime import datetime, timedelta
 from typing import Optional
 import json
 import csv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from api_gateway.database import get_db_session_sync, Customer, APIKey, UsageLog, PricingConfig, ModelMetadata
+from api_gateway.database import get_db_session_sync, Customer, APIKey, UsageLog, PricingConfig, ModelMetadata, DeviceRegistration
 from api_gateway.auth import hash_api_key
 from api_gateway.usage import get_usage_summary, check_budget
 
@@ -56,7 +63,34 @@ def create_customer(name: str, email: str, monthly_budget: Optional[float] = Non
         db.close()
 
 
-def generate_key(customer_id: int):
+def send_email_via_gmail(to_email: str, subject: str, body_plain: str, body_html: Optional[str] = None, gmail_user: str = None, gmail_password: str = None) -> bool:
+    """Send email via Gmail SMTP."""
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['From'] = gmail_user
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        # Add plain text version
+        msg.attach(MIMEText(body_plain, 'plain'))
+        
+        # Add HTML version if provided
+        if body_html:
+            msg.attach(MIMEText(body_html, 'html'))
+        
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(gmail_user, gmail_password)
+        text = msg.as_string()
+        server.sendmail(gmail_user, to_email, text)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
+
+
+def generate_key(customer_id: int, send_email: bool = False, gmail_user: Optional[str] = None, gmail_password: Optional[str] = None):
     """Generate an API key for a customer."""
     db = get_db_session_sync()
     try:
@@ -82,6 +116,191 @@ def generate_key(customer_id: int):
         print(f"✓ Generated API key for {customer.name} (ID: {customer.id})")
         print(f"  Key ID: {db_key.id}")
         print(f"  API Key: {api_key}")
+        
+        # Send email if requested
+        if send_email:
+            if not gmail_user or not gmail_password:
+                print("  ⚠️  Gmail credentials not provided. Skipping email.")
+            else:
+                subject = "Your API Key for Bet Assistant"
+                
+                # Plain text version
+                body_plain = f"""Hello {customer.name},
+
+Your API key has been generated successfully.
+
+API Key: {api_key}
+Key ID: {db_key.id}
+
+You can use this key to access the Bet Assistant API at:
+https://bet.laserpointlabs.com
+
+Important: Keep this key secure and do not share it with anyone.
+
+If you did not request this key, please contact support immediately.
+
+Best regards,
+Bet Assistant Team
+"""
+                
+                # HTML version with mobile-friendly copy button
+                body_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px;
+        }}
+        .api-key-container {{
+            margin: 25px 0;
+        }}
+        .api-key-box {{
+            background-color: #f8f9fa;
+            border: 3px solid #007bff;
+            border-radius: 12px;
+            padding: 25px 15px;
+            margin: 15px 0;
+            text-align: center;
+            -webkit-tap-highlight-color: rgba(0, 123, 255, 0.3);
+        }}
+        .api-key-label {{
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }}
+        .api-key-value {{
+            font-family: 'Courier New', 'Monaco', monospace;
+            font-size: 26px;
+            font-weight: bold;
+            color: #fff;
+            letter-spacing: 1px;
+            word-break: break-all;
+            padding: 40px 25px;
+            background-color: #007bff;
+            border-radius: 15px;
+            border: none;
+            margin: 20px 0;
+            text-align: center;
+            min-height: 120px;
+            display: block;
+            -webkit-user-select: all;
+            -moz-user-select: all;
+            -ms-user-select: all;
+            user-select: all;
+            -webkit-tap-highlight-color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 6px 12px rgba(0, 123, 255, 0.3);
+            line-height: 1.4;
+        }}
+        .api-key-value:active {{
+            background-color: #0056b3;
+        }}
+        .copy-button-link {{
+            display: block;
+            text-decoration: none;
+            margin: 20px 0;
+        }}
+        .copy-button-large {{
+            background-color: #28a745;
+            color: white;
+            padding: 25px 30px;
+            border-radius: 12px;
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+            -webkit-tap-highlight-color: rgba(40, 167, 69, 0.5);
+            transition: all 0.2s;
+        }}
+        .copy-button-large:active {{
+            background-color: #218838;
+            transform: scale(0.98);
+        }}
+        .copy-hint {{
+            font-size: 16px;
+            color: #666;
+            margin-top: 15px;
+            font-weight: 500;
+        }}
+        .info-box {{
+            background-color: #e8f4f8;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }}
+        .warning-box {{
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }}
+        a {{
+            color: #2196F3;
+            text-decoration: none;
+        }}
+        @media only screen and (max-width: 600px) {{
+            body {{
+                padding: 10px;
+            }}
+            .api-key-value {{
+                font-size: 24px;
+                padding: 45px 25px;
+                min-height: 140px;
+            }}
+            .copy-hint {{
+                font-size: 22px;
+                margin-top: 25px;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <h2>Hello {customer.name},</h2>
+    
+    <p>Your API key has been generated successfully.</p>
+    
+    <div class="api-key-container">
+        <div class="api-key-box">
+            <div class="api-key-label">Your API Key</div>
+            <a href="https://bet.laserpointlabs.com?key={api_key}" class="copy-button-link">
+                <div class="copy-button-large">📋 Tap Here to Get Your API Key</div>
+            </a>
+            <div class="api-key-value">{api_key}</div>
+        </div>
+    </div>
+    
+    <div class="info-box">
+        <strong>Key ID:</strong> {db_key.id}<br>
+        <strong>Access URL:</strong> <a href="https://bet.laserpointlabs.com">https://bet.laserpointlabs.com</a>
+    </div>
+    
+    <div class="warning-box">
+        <strong>⚠️ Security Reminder:</strong><br>
+        Keep this key secure and do not share it with anyone. If you did not request this key, please contact support immediately.
+    </div>
+    
+    <p>Best regards,<br>
+    <strong>Bet Assistant Team</strong></p>
+</body>
+</html>
+"""
+                
+                if send_email_via_gmail(customer.email, subject, body_plain, body_html, gmail_user, gmail_password):
+                    print(f"  ✓ API key sent via email to {customer.email}")
+                else:
+                    print(f"  ✗ Failed to send email. API key displayed above.")
+        
         print(f"  ⚠️  Save this key securely - it will not be shown again!")
     except Exception as e:
         db.rollback()
@@ -552,6 +771,91 @@ def list_models():
     asyncio.run(get_models())
 
 
+def list_devices(customer_id: Optional[int] = None):
+    """List registered devices, optionally filtered by customer."""
+    db = get_db_session_sync()
+    try:
+        query = db.query(DeviceRegistration).join(APIKey).join(Customer)
+        
+        if customer_id:
+            query = query.filter(Customer.id == customer_id)
+        
+        devices = query.all()
+        
+        if not devices:
+            print("No registered devices found.")
+            return
+        
+        print(f"\n{'='*80}")
+        print(f"{'ID':<5} {'Customer':<20} {'Device Name':<25} {'Type':<10} {'Active':<8} {'Last Used'}")
+        print(f"{'='*80}")
+        
+        for device in devices:
+            customer = device.api_key.customer
+            last_used = device.last_used.strftime("%Y-%m-%d %H:%M") if device.last_used else "Never"
+            status = "Yes" if device.active else "No"
+            
+            print(f"{device.id:<5} {customer.name:<20} {(device.device_name or 'Unknown'):<25} {(device.device_type or 'N/A'):<10} {status:<8} {last_used}")
+        
+        print(f"{'='*80}")
+        print(f"Total: {len(devices)} device(s)")
+        
+    except Exception as e:
+        print(f"Error listing devices: {e}")
+    finally:
+        db.close()
+
+
+def revoke_device(device_id: int):
+    """Revoke a device registration by ID."""
+    db = get_db_session_sync()
+    try:
+        device = db.query(DeviceRegistration).filter(DeviceRegistration.id == device_id).first()
+        
+        if not device:
+            print(f"Error: Device with ID {device_id} not found")
+            return
+        
+        customer = device.api_key.customer
+        device_name = device.device_name or "Unknown"
+        
+        device.active = False
+        db.commit()
+        
+        print(f"✓ Revoked device '{device_name}' (ID: {device_id}) for customer {customer.name}")
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error revoking device: {e}")
+    finally:
+        db.close()
+
+
+def delete_device(device_id: int):
+    """Permanently delete a device registration."""
+    db = get_db_session_sync()
+    try:
+        device = db.query(DeviceRegistration).filter(DeviceRegistration.id == device_id).first()
+        
+        if not device:
+            print(f"Error: Device with ID {device_id} not found")
+            return
+        
+        customer = device.api_key.customer
+        device_name = device.device_name or "Unknown"
+        
+        db.delete(device)
+        db.commit()
+        
+        print(f"✓ Deleted device '{device_name}' (ID: {device_id}) for customer {customer.name}")
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting device: {e}")
+    finally:
+        db.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Ollama API Gateway Management CLI",
@@ -604,6 +908,9 @@ Examples:
     # Generate key
     parser_key = subparsers.add_parser("generate-key", help="Generate a new API key for customer")
     parser_key.add_argument("customer_id", type=int, help="Customer ID")
+    parser_key.add_argument("--send-email", action="store_true", help="Send API key via email to customer")
+    parser_key.add_argument("--gmail-user", help="Gmail address for sending (or set GMAIL_USER env var)")
+    parser_key.add_argument("--gmail-password", help="Gmail app password (or set GMAIL_PASSWORD env var)")
     
     # Refresh key
     parser_refresh = subparsers.add_parser("refresh-key", help="Refresh an API key (revoke old, create new)")
@@ -649,6 +956,16 @@ Examples:
     # Sync models
     subparsers.add_parser("sync-models", help="Sync available models from Ollama to database")
     
+    # Device management
+    parser_devices = subparsers.add_parser("list-devices", help="List registered devices")
+    parser_devices.add_argument("--customer-id", type=int, help="Filter by customer ID")
+    
+    parser_revoke_device = subparsers.add_parser("revoke-device", help="Revoke a device registration")
+    parser_revoke_device.add_argument("device_id", type=int, help="Device ID to revoke")
+    
+    parser_delete_device = subparsers.add_parser("delete-device", help="Permanently delete a device registration")
+    parser_delete_device.add_argument("device_id", type=int, help="Device ID to delete")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -668,7 +985,9 @@ Examples:
     elif args.command == "delete-customer":
         delete_customer(args.customer_id, force=args.force)
     elif args.command == "generate-key":
-        generate_key(args.customer_id)
+        gmail_user = args.gmail_user or os.getenv("GMAIL_USER")
+        gmail_password = args.gmail_password or os.getenv("GMAIL_PASSWORD")
+        generate_key(args.customer_id, send_email=args.send_email, gmail_user=gmail_user, gmail_password=gmail_password)
     elif args.command == "refresh-key":
         refresh_key(args.key_id)
     elif args.command == "revoke-key":
@@ -689,6 +1008,14 @@ Examples:
         list_models()
     elif args.command == "sync-models":
         sync_models()
+    elif args.command == "list-devices":
+        list_devices(args.customer_id)
+    elif args.command == "revoke-device":
+        revoke_device(args.device_id)
+    elif args.command == "delete-device":
+        delete_device(args.device_id)
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":

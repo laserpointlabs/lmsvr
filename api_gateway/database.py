@@ -36,6 +36,7 @@ class APIKey(Base):
     
     customer = relationship("Customer", back_populates="api_keys")
     usage_logs = relationship("UsageLog", back_populates="api_key")
+    device_registrations = relationship("DeviceRegistration", back_populates="api_key", cascade="all, delete-orphan")
 
 
 class UsageLog(Base):
@@ -75,6 +76,26 @@ class ModelMetadata(Base):
     description = Column(Text, nullable=True)
     context_window = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DeviceRegistration(Base):
+    """
+    Stores device tokens linked to API keys.
+    When a user activates their API key on a device, a device token is generated
+    and stored here. The device can then authenticate using just the token.
+    """
+    __tablename__ = "device_registrations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    device_token = Column(String, unique=True, nullable=False, index=True)
+    api_key_id = Column(Integer, ForeignKey("api_keys.id"), nullable=False)
+    device_name = Column(String, nullable=True)  # e.g., "iPhone", "Chrome on Windows"
+    device_type = Column(String, nullable=True)  # "phone", "computer", "tablet"
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used = Column(DateTime, default=datetime.utcnow)
+    active = Column(Boolean, default=True)
+    
+    api_key = relationship("APIKey", back_populates="device_registrations")
 
 
 # Database setup

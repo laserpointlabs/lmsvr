@@ -3,7 +3,7 @@ Client wrapper for Ollama API calls.
 """
 import httpx
 import os
-from typing import Optional, Dict, Any, AsyncGenerator
+from typing import Optional, Dict, Any, AsyncGenerator, List
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ async def list_models() -> list[Dict[str, Any]]:
         return []
 
 
-async def chat(model: str, messages: list, stream: bool = False, options: Optional[Dict] = None) -> Dict[str, Any]:
+async def chat(model: str, messages: list, stream: bool = False, options: Optional[Dict] = None, tools: Optional[List] = None) -> Dict[str, Any]:
     """Send chat request to Ollama (non-streaming)."""
     payload = {
         "model": model,
@@ -36,7 +36,9 @@ async def chat(model: str, messages: list, stream: bool = False, options: Option
     }
     if options:
         payload["options"] = options
-    
+    if tools:
+        payload["tools"] = tools
+
     async with httpx.AsyncClient(timeout=300.0) as client:
         response = await client.post(
             f"{OLLAMA_BASE_URL}/api/chat",
@@ -46,7 +48,7 @@ async def chat(model: str, messages: list, stream: bool = False, options: Option
         return response.json()
 
 
-async def chat_stream(model: str, messages: list, options: Optional[Dict] = None) -> AsyncGenerator[bytes, None]:
+async def chat_stream(model: str, messages: list, options: Optional[Dict] = None, tools: Optional[List] = None) -> AsyncGenerator[bytes, None]:
     """Send streaming chat request to Ollama, yields raw bytes for SSE."""
     payload = {
         "model": model,
@@ -55,7 +57,9 @@ async def chat_stream(model: str, messages: list, options: Optional[Dict] = None
     }
     if options:
         payload["options"] = options
-    
+    if tools:
+        payload["tools"] = tools
+
     async with httpx.AsyncClient(timeout=300.0) as client:
         async with client.stream(
             "POST",
@@ -77,7 +81,7 @@ async def generate(model: str, prompt: str, stream: bool = False, options: Optio
     }
     if options:
         payload["options"] = options
-    
+
     async with httpx.AsyncClient(timeout=300.0) as client:
         response = await client.post(
             f"{OLLAMA_BASE_URL}/api/generate",
@@ -95,4 +99,3 @@ async def check_ollama_health() -> bool:
             return response.status_code == 200
     except Exception:
         return False
-

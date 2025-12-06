@@ -1,0 +1,40 @@
+name: System Health Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # Run every 6 hours
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests python-dotenv
+
+    - name: Run Health Check
+      env:
+        # Set these secrets in GitHub Repository Settings
+        SYSTEM_TEST_KEY: ${{ secrets.SYSTEM_TEST_KEY }}
+        # Point to your Cloudflare Tunnel URL
+        API_BASE_URL: ${{ vars.API_BASE_URL || 'https://lmapi.laserpointlabs.com' }}
+      run: |
+        python tests/system_health_check.py
+
+    - name: Upload Logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: health-check-logs
+        path: logs/system_health.log

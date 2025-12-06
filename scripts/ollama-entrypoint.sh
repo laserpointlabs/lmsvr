@@ -26,3 +26,8 @@ wait $OLLAMA_PID
 
 
 
+
+
+
+
+

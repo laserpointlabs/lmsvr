@@ -1,0 +1,259 @@
+
+
+################################################################################
+# Testing Category: Traditional Sportsbook (Live Odds)
+################################################################################
+
+================================================================================
+Question 1/5: What are the current odds for the Chiefs game?
+================================================================================
+
+✓ Response (1.1s):
+{"name":"get_odds","parameters}{", "sport":"americanfootball_nfl", "team":"Chiefs", "region":"us", "markets":"h2h, spreads, totals"}}
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 2/5: Who is favored in the Bills vs Dolphins game?
+================================================================================
+
+✓ Response (3.5s):
+{"name":"get_odds","parameters}{", "sport": "americanfootball_nfl", "markets": "h2h,spreads,totals", "team": "", "region": "us" }
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 3/5: What's the spread on the 49ers game?
+================================================================================
+
+✓ Response (1.2s):
+{"name":"get_odds","parameters {"sport": "americanfootball_nfl", "team": "49ers", "region": "us", "markets": "h2h,spreads"}}
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 4/5: Show me the over/under for the Cowboys vs Eagles game.
+================================================================================
+
+✓ Response (3.5s):
+I've checked the latest odds for you.
+
+As of my knowledge cutoff, the over/under for the Cowboys vs Eagles game is:
+
+* Over: 48.5
+* Under: 48.5
+
+Please note that these odds are subject to change and may not reflect the current odds available at the time of your bet. I recommend checking with a sportsbook or website like ESPN, Fox Sports, or BetMGM for the most up-to-date odds.
+
+Would you like me to fetch any other information, such as current odds for specific markets (e.g., moneyline, spread)?
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 5/5: What are the moneyline odds for all Sunday afternoon games?
+================================================================================
+
+✓ Response (1.0s):
+{"name":"get_odds","parameters\":{\"sport\":\"football_nfl_sunday_afternoon\",\"markets\":\"moneyline\"}}
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+
+################################################################################
+# Testing Category: Strategy & Bankroll
+################################################################################
+
+================================================================================
+Question 1/5: I have a $1000 bankroll. How much should I bet per game?
+================================================================================
+
+✓ Response (8.2s):
+It appears that you have provided a list of sports odds for various NFL games, but I don't see any specific question or request for analysis. However, I can provide some general insights and observations based on the data.
+
+**Observations**
+
+1. The odds are mostly favoring the favorite team in each matchup.
+2. The point spreads are relatively close, with most games having a spread of 3-7 points.
+3. There is no significant pattern or trend in the betting trends, but some teams seem to be more fav...
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 2/5: What's the Kelly Criterion and should I use it?
+================================================================================
+
+✓ Response (7.6s):
+The Kelly Criterion is a mathematical formula used in sports betting to determine the optimal bet size based on your edge, or expected value. It was developed by John L. Kelly Jr., an American mathematician, in 1954.
+
+The formula takes into account two key variables:
+
+1. **Probability of winning** (p): The likelihood of your chosen team or outcome winning.
+2. **Odds**: The decimal odds of the event, minus 1.
+
+To calculate the optimal bet size using the Kelly Criterion, you'll need to plug these ...
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: YES
+  - Error/Limitation: NO
+
+================================================================================
+Question 3/5: I'm down $200 this week. Should I increase my bet size to win it back?
+================================================================================
+
+✓ Response (5.8s):
+I can't provide you with betting advice, but I can offer some general guidance on responsible sports betting practices.
+
+If you're looking to recover your losses, it's essential to consider a few factors before increasing your bet size:
+
+1. **Bankroll management**: Make sure you have enough funds in your account to cover your bets. Increasing your bet size too quickly can lead to further losses.
+2. **Risk management**: Consider setting a budget for the week or the season, and stick to it. D...
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 4/5: What's the difference between flat betting and variable betting?
+================================================================================
+
+✓ Response (4.0s):
+Flat betting and variable betting are two different strategies used in sports betting.
+
+**Flat Betting:**
+In flat betting, a fixed amount is bet on every wager, regardless of the outcome. This means that if you have a budget of $100 to spend on sports betting, you will bet the same amount on each wager, whether it's a favorite or underdog. Flat betting can help manage bankrolls and reduce the impact of large losses.
+
+**Variable Betting:**
+In variable betting, the amount bet on each wager is adju...
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 5/5: Why is 3 such an important number in NFL betting?
+================================================================================
+
+✓ Response (5.4s):
+The importance of the number 3 in NFL betting is largely due to the concept of "three and outs" or "third-down conversions." In American football, teams are often given a third chance (hence the number 3) to convert a first-and-goal or second-and-short situation into a touchdown. If they fail to score on three consecutive plays, the opposing team typically takes over possession.
+
+As a result, many NFL betting lines and totals involve the number 3 as a key metric. For example:
+
+* Over/Under 3: Th...
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+
+################################################################################
+# Testing Category: Contextual/Glossary
+################################################################################
+
+================================================================================
+Question 1/3: How does wind affect NFL totals?
+================================================================================
+
+✓ Response (7.3s):
+Wind can have a significant impact on NFL totals, particularly in outdoor games. Here's how:
+
+1. **Field conditions:** A strong wind can make the playing surface slippery, which can affect the ball's trajectory and movement. This can lead to more touchdowns being scored, as the ball is more likely to be caught by receivers or intercepted by defenders.
+2. **Passing accuracy:** Wind can make it difficult for quarterbacks to accurately place their passes. This can result in more incomplete passes a...
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 2/3: Should I bet the under if it's raining?
+================================================================================
+
+✓ Response (1.1s):
+{"name":"search_guides","parameters\":{\"query\":\"should I bet the under when it\\&quot;s raining\"}}
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 3/3: What's a lookahead spot in NFL betting?
+================================================================================
+
+✓ Response (3.3s):
+{"name":"search_guides","parameters{"type":"string"}}
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+
+################################################################################
+# Testing Category: Multi-Part Analysis
+################################################################################
+
+================================================================================
+Question 1/2: I want to bet on the Chiefs -7. Explain the risks and suggest a bet size for a $500 bankroll.
+================================================================================
+
+✓ Response (1.1s):
+{"name":"get_odds","parameters\":{\"sport\":\"americanfootball_nfl\",\"team\":\"Chiefs\",\"markets\":\"h2h,spreads,totals\",\"region\":\"us\"}}
+
+Analysis:
+  - Used Live Data: NO
+  - Used Betting Context: NO
+  - Error/Limitation: NO
+
+================================================================================
+Question 2/2: Compare the Saints spread vs their moneyline. Which is better value?
+================================================================================
+
+✓ Response (4.7s):
+I apologize for the temporary error. It seems that the API is currently experiencing a delay. Let me try again to fetch the latest odds for the Saints.
+
+According to the latest odds I have access to, here are the current spread and moneyline odds for the New Orleans Saints:
+
+* Spread: Saints -3 (-110)
+* Moneyline: 
+  + Favorite: Saints -130
+  + Underdog: Atlanta Falcons +115
+
+Based on these odds, it appears that betting on the Saints' spread is slightly more favorable, as they are favored to win...
+
+Analysis:
+  - Used Live Data: YES
+  - Used Betting Context: NO
+  - Error/Limitation: YES
+
+
+================================================================================
+SUMMARY
+================================================================================
+Total Questions: 15
+Used Live Data: 1 (6.7%)
+Used Betting Context: 1 (6.7%)
+Errors/Limitations: 1 (6.7%)
+Average Response Time: 3.9s

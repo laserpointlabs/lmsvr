@@ -1,0 +1,172 @@
+################################################################################
+# COMPREHENSIVE TEST SUITE - Model: qwen2.5:32b
+################################################################################
+
+
+################################################################################
+# Live Odds
+################################################################################
+
+================================================================================
+[1/8] What are the current odds for the Chiefs game?
+================================================================================
+✓ GOOD (18.5s)
+Response: The current odds for the upcoming Chiefs game against the Houston Texans are as follows:
+
+- **Head to Head:** The Kansas City Chiefs are favored at -186 (DraftKings), -186 (FanDuel), and -200 (MyBookie.ag).
+- **Spreads:** Chiefs are at -3.5 points, with odds of -105 on DraftKings, -112 on FanDuel, a...
+
+================================================================================
+[2/8] Who is favored in the Bills vs Dolphins game?
+================================================================================
+⚠ GENERIC (13.9s)
+Response: The Buffalo Bills are favored in their upcoming game against the Cincinnati Bengals. The odds show that betting on the Bills to win straight up ranges from -270 to -285, depending on the bookmaker. This indicates a strong favoritism towards the Bills winning the match....
+
+================================================================================
+[3/8] What's the spread on the 49ers game?
+================================================================================
+✓ GOOD (10.3s)
+Response: The spread for the 49ers game against the Tennessee Titans is set at -12.5 points for the San Francisco 49ers, according to multiple bookmakers like DraftKings, BetUS, and FanDuel. The game is scheduled for December 14th....
+
+================================================================================
+[4/8] Show me the over/under for the Cowboys vs Eagles game.
+================================================================================
+✓ GOOD (13.4s)
+Response: The over/under for the Cowboys vs Eagles game is set at 47.5 points according to DraftKings and FanDuel, with BetUS listing it slightly lower at 47 points. The odds are relatively even across these bookmakers for both the over and under....
+
+================================================================================
+[5/8] What are the moneyline odds for all Sunday afternoon games?
+================================================================================
+❌ TIMEOUT (60s)
+
+================================================================================
+[6/8] What are the odds for Alabama's next game?
+================================================================================
+❌ TIMEOUT (60s)
+
+================================================================================
+[7/8] Show me the spread for the Ohio State vs Michigan game.
+================================================================================
+⚠ GENERIC (28.3s)
+Response: The spread for the upcoming game between Ohio State and Michigan is not available in the provided data, as it shows odds for an Ohio State game against Indiana instead. For the Indiana vs Ohio State game, Ohio State is favored by 4 to 4.5 points depending on the bookmaker. If you need the specific s...
+
+================================================================================
+[8/8] What's the total for the Georgia game?
+================================================================================
+⚠ GENERIC (13.6s)
+Response: It looks like you might be interested in a game involving Georgia from college football (NCAAF). Could you confirm if this is the case and specify which opponent they are playing against? This will help me provide you with the exact total for that particular game....
+
+################################################################################
+# Strategy
+################################################################################
+
+================================================================================
+[1/6] I have a $1000 bankroll. How much should I bet per game?
+================================================================================
+✓ GOOD (19.8s)
+Response: When deciding how much to bet per game, it's important to consider risk management. A common strategy is the Kelly Criterion or a variant of it that bets a smaller fraction (e.g., half-Kelly) to reduce volatility and protect your bankroll.
+
+The full Kelly Criterion suggests betting a percentage of y...
+
+================================================================================
+[2/6] What's the Kelly Criterion and should I use it?
+================================================================================
+✓ GOOD (19.3s)
+Response: The Kelly Criterion is a mathematical formula used for determining the optimal size of a series of bets in order to maximize wealth growth over time. The formula is `(bp - q) / b`, where:
+- `b` is the net odds received on the bet (decimal odds minus 1).
+- `p` is your probability estimate of winning....
+
+================================================================================
+[3/6] I'm down $200 this week. Should I increase my bet size to win it back?
+================================================================================
+⚠ GENERIC (8.1s)
+Response: It's important not to chase losses by increasing your bet sizes. This strategy can lead to further losses and is generally not recommended in responsible gambling practices. Instead, consider taking a break from betting or setting strict limits on how much you're willing to wager. If you continue be...
+
+================================================================================
+[4/6] What's the difference between flat betting and variable betting?
+================================================================================
+✓ GOOD (15.4s)
+Response: Flat betting involves placing bets of a fixed size on each bet or over a series of wagers, regardless of the odds or previous outcomes. This method is straightforward but doesn't adjust to the changing probabilities and potential returns.
+
+Variable betting, in contrast, adjusts the amount wagered ba...
+
+================================================================================
+[5/6] Why is 3 such an important number in NFL betting?
+================================================================================
+⚠ GENERIC (17.8s)
+Response: The number 3 holds significant importance in NFL betting due to its relevance in key aspects of the game. In football, a field goal is worth 3 points, which can be crucial in tight games where scoring a touchdown might not be possible. This makes strategies around attempting or defending against fie...
+
+================================================================================
+[6/6] Should I take the Packers at -2.5 or wait for -3?
+================================================================================
+⚠ GENERIC (12.9s)
+Response: Based on the current odds, the Packers are being offered at a spread of -6.5 across multiple bookmakers with no indication of them moving to -3 anytime soon. If you're looking for the Pack to win by more than 2.5 points but less than 7, you should place your bet now as waiting for the spread to reac...
+
+################################################################################
+# Contextual
+################################################################################
+
+================================================================================
+[1/4] How does wind affect NFL totals?
+================================================================================
+⚠ GENERIC (10.7s)
+Response: While there are no specific expert guides directly addressing how wind affects NFL totals, we can infer some general impacts. Wind can generally increase the volatility of games by affecting passing accuracy and kick distance, which might lead to lower scoring games. However, it's also possible that...
+
+================================================================================
+[2/4] Should I bet the under if it's raining?
+================================================================================
+⚠ GENERIC (16.0s)
+Response: While I couldn't find specific guidance on the impact of rain on betting in this instance, typically in sports like baseball or football, rain can indeed affect game dynamics by potentially reducing scoring opportunities. This might favor an under bet.
+
+For a more precise decision, it would be helpf...
+
+================================================================================
+[3/4] What's a lookahead spot in NFL betting?
+================================================================================
+✓ GOOD (12.1s)
+Response: It seems there was no direct definition for "lookahead spot" in the provided glossary. However, in NFL betting context, a lookahead spot typically refers to when a team has a much longer rest period compared to their opponent due to the scheduling of games. This can happen when a team's game is move...
+
+================================================================================
+[4/4] Should I bet on a team coming off a bye week?
+================================================================================
+⚠ GENERIC (12.8s)
+Response: Based on general sports analytics, teams coming off a bye week often show improved performance due to rest and preparation. However, there's no one-size-fits-all answer as outcomes can vary widely depending on the team’s situation, injuries, and upcoming opponent. For specific advice, consider looki...
+
+################################################################################
+# Multi-Part
+################################################################################
+
+================================================================================
+[1/2] I want to bet on the Chiefs -7. Explain the risks and suggest a bet size for a $500 bankroll.
+================================================================================
+✓ GOOD (28.8s)
+Response: Based on the current odds, it appears there is a slight difference in how various bookmakers are pricing the spread for the Kansas City Chiefs, but they all list them as -3.5 to win by more than 3.5 points. Your bet of the Chiefs -7 indicates you believe they will dominate this game.
+
+**Risks:**
+1. ...
+
+================================================================================
+[2/2] Compare the Saints spread vs their moneyline. Which is better value?
+================================================================================
+✓ GOOD (27.8s)
+Response: Based on the current odds, here is a comparison between the New Orleans Saints' spread and moneyline:
+
+- **Moneyline:** The odds for betting on the Saints to win outright are around +330 to +360 across different bookmakers. This means that if you bet $100, you could potentially win $330 to $360.
+  
+...
+
+
+================================================================================
+FINAL SUMMARY
+================================================================================
+Model: qwen2.5:32b
+Total Questions: 20
+✓ Good Answers: 9/20 (45.0%)
+❌ Tool Call Leaks: 0/20 (0.0%)
+⚠ Errors: 0/20 (0.0%)
+
+Data Sources:
+  - Used Live API: 4/20 (20.0%)
+  - Used Guides: 5/20 (25.0%)
+
+Avg Response Time: 16.6s

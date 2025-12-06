@@ -35,3 +35,8 @@ echo "  python3 cli/cli.py list-customers"
 
 
 
+
+
+
+
+

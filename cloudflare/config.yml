@@ -4,4 +4,6 @@ credentials-file: /etc/cloudflared/credentials.json
 ingress:
   - hostname: lmapi.laserpointlabs.com
     service: http://api_gateway:8000
+  - hostname: bet.laserpointlabs.com
+    service: http://bet_frontend:80
   - service: http_status:404

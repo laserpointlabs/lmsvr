@@ -1,0 +1,97 @@
+
+################################################################################
+# Live Odds - Model: granite4:3b
+################################################################################
+
+[1/8] What are the current odds for the Chiefs game?
+  ⚠ (2.6s): The current odds for the Chiefs game are not available in our database at this time. Please check back later or search for updated information using t...
+[2/8] Who is favored in the Bills vs Dolphins game?
+  ⚠ (2.9s): The Buffalo Bills are favored in their upcoming game against the Cincinnati Bengals with odds of -270. The spread is also heavily weighted against the...
+[3/8] What's the spread on the 49ers game?
+  ✓ (3.0s): The current spread for the San Francisco 49ers game is -12.5 (-110) and +12.5 (-110). This means the 49ers are favored to win by 12.5 points with odds...
+[4/8] Show me the over/under for the Cowboys vs Eagles game.
+  ✓ (3.4s): The current over/under (total) for the Cowboys vs Eagles game is set at 47.5 points. Both DraftKings and FanDuel list the total at 47.5 with slight va...
+[5/8] What are the moneyline odds for all Sunday afternoon games?
+  ✓ (3.1s): The current moneyline odds for all Sunday afternoon games are:
+
+- **NFL Games:**
+  - Game 1: Team A +150, Team B -170
+  - Game 2: Team C +200, Team D ...
+[6/8] What are the odds for Alabama's next game?
+  ✓ (4.0s): Based on the latest odds data:
+
+- The Alabama Crimson Tide are favored with +114 at FanDuel and DraftKings.
+- The Georgia Bulldogs are slight underdog...
+[7/8] Show me the spread for the Ohio State vs Michigan game.
+  ⚠ (2.7s): The current spread for the Ohio State vs Michigan game is:
+
+**Ohio State Buckeyes**: -186  
+**Michigan Wolverines**: +156  
+
+This reflects the point s...
+[8/8] What's the total for the Georgia game?
+  ⚠ (2.8s): The current total for the Georgia game is set at 48.5 points. The over/under line is set at -105/-115, indicating that bettors think there's a slight ...
+
+################################################################################
+# Strategy - Model: granite4:3b
+################################################################################
+
+[1/6] I have a $1000 bankroll. How much should I bet per game?
+  ✓ (2.7s): Based on your $1,000 bankroll and standard betting strategies, it is recommended to bet **1 unit per game**, where 1 unit equals **$10** (1% of your t...
+[2/6] What's the Kelly Criterion and should I use it?
+  ✓ (4.5s): The Kelly Criterion is a mathematical formula used to determine the optimal size of a bet in sports betting or any gambling scenario. It helps maximiz...
+[3/6] I'm down $200 this week. Should I increase my bet size to win it back?
+  ✓ (5.0s): Based on the current odds and key numbers guide:
+
+1. **Odds Check**: The Patriots are favored with -7.5 points, indicating they're expected to win by ...
+[4/6] What's the difference between flat betting and variable betting?
+  ✓ (5.5s): Flat betting and variable betting are two distinct approaches in sports betting:
+
+1. **Flat Betting** (Recommended):
+   - Consistently bet the same am...
+[5/6] Why is 3 such an important number in NFL betting?
+  ✓ (7.4s): The number 3 is important in NFL betting for several reasons:
+
+1. **Three-Point Spread**: The moneyline spread of +3 or -3 is common because it reflec...
+[6/6] Should I take the Packers at -2.5 or wait for -3?
+  ⚠ (3.1s): Based on the current odds for the Packers game (Total: 44.5), taking the Packers at -2.5 is advisable since it's currently available and aligns with t...
+
+################################################################################
+# Contextual - Model: granite4:3b
+################################################################################
+
+[1/4] How does wind affect NFL totals?
+  ⚠ (3.3s): Based on the latest real-time NFL totals data:
+
+**Wind Impact:** The strongest correlation for underlines is wind speeds above 15 mph. Wind significan...
+[2/4] Should I bet the under if it's raining?
+  ⚠ (3.6s): Based on the current totals odds for a rain event in US American Football (NCAAF), betting the under if it's raining could be a good strategy. The odd...
+[3/4] What's a lookahead spot in NFL betting?
+  ⚠ (3.0s): A lookahead spot in NFL betting refers to a situation where one team is favored over another in an upcoming game. This term is often used when analyst...
+[4/4] Should I bet on a team coming off a bye week?
+  ✓ (5.1s): Based on the current odds for the upcoming Chicago Bears vs Green Bay Packers game:
+
+- The Green Bay Packers are favored with a moneyline of -325.
+- T...
+
+################################################################################
+# Multi-Part - Model: granite4:3b
+################################################################################
+
+[1/2] I want to bet on the Chiefs -7. Explain the risks and suggest a bet size for a $500 bankroll.
+  ✓ (4.5s): The Chiefs are favored with a spread of -7 at odds of -110. This means they need to win by more than 7 points for bets on them to pay off.
+
+For a $500...
+[2/2] Compare the Saints spread vs their moneyline. Which is better value?
+  ✓ (4.1s): Based on the current odds for the New Orleans Saints:
+
+- Spread: +8.5 (-110)
+- Moneyline: +330
+
+The moneyline (+330) is a much larger number than the ...
+
+================================================================================
+FINAL SCORE - granite4:3b
+================================================================================
+✓ Success Rate: 12/20 (60%)
+⚡ Avg Speed: 3.8s

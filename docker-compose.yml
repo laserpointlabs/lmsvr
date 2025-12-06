@@ -60,13 +60,33 @@ services:
     volumes:
       - ./data:/app/data
       - ./api_gateway:/app
+      - ./mcp_servers:/mcp_servers
     environment:
       - DATABASE_URL=sqlite:////app/data/lmapi.db
       - OLLAMA_BASE_URL=http://ollama:11434
       - LOG_LEVEL=INFO
       - CLOUDFLARE_TUNNEL_URL=${CLOUDFLARE_TUNNEL_URL:-https://lmapi.laserpointlabs.com}
+      # Get your free key from https://the-odds-api.com/
+      - ODDS_API_KEY=${ODDS_API_KEY}
+      # Time to clear alerts (in minutes)
+      - ALERT_TTL_MINUTES=${ALERT_TTL_MINUTES:-5}
+      # OpenAI Key
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       - ollama
+    restart: unless-stopped
+    networks:
+      - lmsvr_network
+
+  bet_frontend:
+    build:
+      context: ./bet_frontend
+      dockerfile: Dockerfile
+    container_name: bet_frontend
+    ports:
+      - "8002:80"  # Optional: for local testing
+    environment:
+      - DEFAULT_MODEL=${BET_DEFAULT_MODEL:-gpt-4o}
     restart: unless-stopped
     networks:
       - lmsvr_network
@@ -78,6 +98,8 @@ services:
     command: tunnel --config /etc/cloudflared/config.yml run
     depends_on:
       api_gateway:
+        condition: service_started
+      bet_frontend:
         condition: service_started
     restart: unless-stopped
     networks:
