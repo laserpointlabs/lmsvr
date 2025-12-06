@@ -133,6 +133,10 @@ async def monitor_lines_loop():
                     result = await mcp_manager.execute_tool("detect_steam_moves", {"sport": sport})
                     logger.info(f"Steam check ({sport}): {result}")
 
+                # 4. Force cleanup of old alerts
+                await mcp_manager.execute_tool("get_recent_alerts", {"limit": 1})
+                logger.info("Alert cleanup routine executed.")
+
                 logger.info("Scheduled check complete.")
 
             except Exception as e:
@@ -1472,6 +1476,9 @@ async def trigger_alert_check(
         # Check for steam moves (last 30 min)
         steam_result = await mcp_manager.execute_tool("detect_steam_moves", {"sport": "americanfootball_nfl"})
         results["steam_moves"] = steam_result
+
+        # Force cleanup
+        await mcp_manager.execute_tool("get_recent_alerts", {"limit": 1})
 
         return {
             "status": "checked",

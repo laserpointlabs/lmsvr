@@ -56,13 +56,20 @@ def save_json_file(filepath: Path, data: Dict):
         json.dump(data, f, indent=2, default=str)
 
 
-def clean_old_alerts(alerts: List[Dict]) -> List[Dict]:
-    """Remove alerts older than ALERT_TTL_MINUTES."""
+def clean_old_alerts(data: Dict) -> Dict:
+    """Move alerts older than ALERT_TTL_MINUTES to expired list."""
+    alerts = data.get('alerts', [])
+    expired = data.get('expired', [])
+
     if ALERT_TTL_MINUTES <= 0:
-        return alerts
+        return data
 
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=ALERT_TTL_MINUTES)
     valid_alerts = []
+
+    # Limit expired list size
+    if len(expired) > 500:
+        expired = expired[:500]
 
     for alert in alerts:
         ts_str = alert.get('timestamp')
@@ -70,63 +77,81 @@ def clean_old_alerts(alerts: List[Dict]) -> List[Dict]:
             continue
 
         try:
-            # Handle ISO format with Z or offset
             if ts_str.endswith('Z'):
                 ts_str = ts_str.replace('Z', '+00:00')
             alert_time = datetime.fromisoformat(ts_str)
 
             if alert_time > cutoff:
                 valid_alerts.append(alert)
+            else:
+                # Move to expired
+                expired.insert(0, alert)
         except:
             continue
 
-    return valid_alerts
+    data['alerts'] = valid_alerts
+    data['expired'] = expired
+    return data
 
 
 def get_alerts() -> List[Dict]:
     """Get stored alerts, filtering out old ones."""
     data = load_json_file(ALERTS_FILE)
-    alerts = data.get('alerts', [])
 
     # Clean old alerts on read
-    fresh_alerts = clean_old_alerts(alerts)
+    data = clean_old_alerts(data)
 
-    # If we cleaned up, save back to disk
-    if len(fresh_alerts) < len(alerts):
-        save_json_file(ALERTS_FILE, {'alerts': fresh_alerts, 'last_updated': datetime.now(timezone.utc).isoformat()})
+    # Save back to disk to persist expiration
+    save_json_file(ALERTS_FILE, data)
 
-    return fresh_alerts
+    return data.get('alerts', [])
 
 
 def save_alert(alert: Dict):
     """Save a new alert."""
     data = load_json_file(ALERTS_FILE)
+
+    # Clean first
+    data = clean_old_alerts(data)
+
     alerts = data.get('alerts', [])
+    expired = data.get('expired', [])
 
-    # Clean old alerts first
-    alerts = clean_old_alerts(alerts)
+    # Check if this is a known alert (active OR expired)
+    game_id = alert.get('game_id')
+    alert_type = alert.get('type')
 
-    # Check for duplicate (same game, same type, within 30 min)
-    dominated = False
+    # 1. Check Active Alerts
     for existing in alerts:
-        if (existing.get('game_id') == alert.get('game_id') and
-            existing.get('type') == alert.get('type')):
+        if (existing.get('game_id') == game_id and
+            existing.get('type') == alert_type):
 
-            # Preserve original timestamp to allow expiration
-            original_timestamp = existing.get('timestamp')
+            # Preserve timestamp
+            alert['timestamp'] = existing.get('timestamp')
 
-            # Update details (in case magnitude changed), but keep original time
+            # Update in place
             existing.update(alert)
-            existing['timestamp'] = original_timestamp
+            save_json_file(ALERTS_FILE, data)
+            print(f"DEBUG: Updated active alert for {alert.get('game')}")
+            return
 
-            dominated = True
-            break
+    # 2. Check Expired Alerts
+    for existing in expired:
+        if (existing.get('game_id') == game_id and
+            existing.get('type') == alert_type):
 
-    if not dominated:
-        alerts.insert(0, alert)  # Newest first
+            # It's expired. Check if it's "Significantly" different?
+            # For now, we assume if it's the same type/game, it's the same drift.
+            # We simply IGNORE it so it doesn't pop up again.
+            print(f"DEBUG: Ignored expired alert for {alert.get('game')}")
+            return
 
-    alerts = alerts[:200]  # Keep last 200 alerts
-    save_json_file(ALERTS_FILE, {'alerts': alerts, 'last_updated': datetime.now(timezone.utc).isoformat()})
+    # 3. It's New
+    print(f"DEBUG: New alert for {alert.get('game')}")
+    alerts.insert(0, alert)
+    data['alerts'] = alerts[:200]
+
+    save_json_file(ALERTS_FILE, data)
 
 
 @mcp.tool()
