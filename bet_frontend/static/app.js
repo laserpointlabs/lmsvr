@@ -628,13 +628,40 @@ function renderAlerts(alerts) {
         const emoji = significance === 'CRITICAL' ? '🚨' :
                      significance === 'HIGH' ? '🔴' : '🟡';
 
+        // Map sport to emoji
+        const sportEmojis = {
+            "americanfootball_nfl": "🏈",
+            "americanfootball_ncaaf": "🏈",
+            "basketball_nba": "🏀",
+            "basketball_ncaab": "🏀",
+            "baseball_mlb": "⚾",
+            "icehockey_nhl": "🏒",
+            "soccer": "⚽",
+            "tennis": "🎾",
+            "mma": "🥊",
+            "boxing": "🥊",
+            "golf": "⛳"
+        };
+        // Try to get emoji from alert object, then map, then default
+        // Note: alert.sport might be 'americanfootball_nfl' or just 'nfl' depending on source
+        let sportEmoji = alert.sport_emoji || sportEmojis[alert.sport];
+
+        if (!sportEmoji) {
+             // Fallback: try partial match
+             if (alert.sport && alert.sport.includes('football')) sportEmoji = "🏈";
+             else if (alert.sport && alert.sport.includes('basketball')) sportEmoji = "🏀";
+             else if (alert.sport && alert.sport.includes('baseball')) sportEmoji = "⚾";
+             else if (alert.sport && alert.sport.includes('hockey')) sportEmoji = "🏒";
+             else sportEmoji = '🎮';
+        }
+
         // Create prompt for analysis
-        const prompt = `Analyze this line movement: ${alert.game} - ${alert.movement}. Why is this happening? Check news and injuries. Any betting opportunities?`;
+        const prompt = `Analyze this line movement: ${sportEmoji} ${alert.game} - ${alert.movement}. Why is this happening? Check news and injuries. Any betting opportunities?`;
         const safePrompt = prompt.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
         return `
             <div class="alert-item ${alertClass}">
-                <div class="alert-type">${emoji} ${alert.type || 'Alert'}</div>
+                <div class="alert-type">${emoji} ${alert.type || 'Alert'} <span class="sport-emoji">${sportEmoji}</span></div>
                 <div class="alert-game">${alert.game || 'Unknown Game'}</div>
                 <div class="alert-detail">${alert.movement || ''}</div>
                 <div class="alert-time">${timeStr}</div>
@@ -708,8 +735,8 @@ function startAlertsPolling() {
     // Initial fetch
     fetchAlerts();
 
-    // Set up polling (poll every 15 seconds for better responsiveness)
-    alertsPollingInterval = setInterval(fetchAlerts, 15000);
+    // Set up polling (poll every 60 seconds to save resources)
+    alertsPollingInterval = setInterval(fetchAlerts, 60000);
 }
 
 // Stop polling

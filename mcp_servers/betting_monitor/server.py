@@ -40,6 +40,21 @@ ML_MOVE_THRESHOLD = 25       # American odds points
 STEAM_MOVE_THRESHOLD = 1.5   # Points in < 30 min = steam
 PROP_MOVE_THRESHOLD = 2.0    # Points/Yards for props
 
+# Sport Emojis
+SPORT_EMOJIS = {
+    "americanfootball_nfl": "🏈",
+    "americanfootball_ncaaf": "🏈",
+    "basketball_nba": "🏀",
+    "basketball_ncaab": "🏀",
+    "baseball_mlb": "⚾",
+    "icehockey_nhl": "🏒",
+    "soccer": "⚽",
+    "tennis": "🎾",
+    "mma": "🥊",
+    "boxing": "🥊",
+    "golf": "⛳"
+}
+
 
 def load_json_file(filepath: Path) -> Dict:
     """Load JSON file or return empty dict."""
@@ -122,6 +137,10 @@ def save_alert(alert: Dict):
     # Check if this is a known alert (active OR expired)
     game_id = alert.get('game_id')
     alert_type = alert.get('type')
+
+    # Add sport emoji to the alert object for convenience
+    if 'sport' in alert:
+        alert['sport_emoji'] = SPORT_EMOJIS.get(alert['sport'], "🎮")
 
     # 1. Check Active Alerts
     for existing in alerts:
@@ -497,9 +516,9 @@ async def compare_to_opening(sport: str = "americanfootball_nfl") -> str:
 
             # Format output
             if not movements:
-                return f"[LINE MOVEMENT CHECK - {sport}]\nNo significant movements detected."
+                return f"[LINE MOVEMENT CHECK - {sport} {SPORT_EMOJIS.get(sport, '')}]\nNo significant movements detected."
 
-            output = f"[🚨 LINE MOVEMENT REPORT - {sport}]\n"
+            output = f"[🚨 LINE MOVEMENT REPORT - {sport} {SPORT_EMOJIS.get(sport, '🎮')}]\n"
             output += f"Significant Movements: {len(movements)} games\n"
             output += "=" * 50 + "\n\n"
 
@@ -616,9 +635,9 @@ async def detect_steam_moves(sport: str = "americanfootball_nfl") -> str:
                         })
 
             if not steam_moves:
-                return f"[STEAM DETECTION - {sport}]\nNo steam moves detected."
+                return f"[STEAM DETECTION - {sport} {SPORT_EMOJIS.get(sport, '')}]\nNo steam moves detected."
 
-            output = f"[🚨🚨 STEAM MOVE ALERT - {sport} 🚨🚨]\n"
+            output = f"[🚨🚨 STEAM MOVE ALERT - {sport} {SPORT_EMOJIS.get(sport, '🎮')} 🚨🚨]\n"
             output += f"Detected {len(steam_moves)} steam move(s) in last 30 min!\n"
             output += "=" * 50 + "\n\n"
 
@@ -819,9 +838,9 @@ async def compare_props(sport: str = "americanfootball_nfl") -> str:
                 continue
 
     if not movements:
-        return f"[PROP CHECK - {sport}]\nNo significant prop movements vs {timestamp}."
+        return f"[PROP CHECK - {sport} {SPORT_EMOJIS.get(sport, '')}]\nNo significant prop movements vs {timestamp}."
 
-    output = f"[🚨 PROP ALERTS - {sport}]\n"
+    output = f"[🚨 PROP ALERTS - {sport} {SPORT_EMOJIS.get(sport, '🎮')}]\n"
     for m in movements:
         output += f"⚡ {m['game']}: {m['desc']}\n"
 
@@ -846,6 +865,10 @@ async def get_recent_alerts(limit: int = 20) -> str:
     for alert in alerts:
         timestamp = alert.get('timestamp', 'Unknown')
         sport = alert.get('sport', 'Unknown')
+
+        # Get sport emoji
+        sport_emoji = SPORT_EMOJIS.get(sport, "🎮") # Default to controller if unknown
+
         try:
             dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
             time_str = dt.strftime("%m/%d %I:%M%p")
@@ -857,7 +880,7 @@ async def get_recent_alerts(limit: int = 20) -> str:
         elif significance == 'HIGH': emoji = "🔴"
         else: emoji = "🟡"
 
-        output += f"{emoji} [{time_str}] {alert.get('type', 'ALERT')} ({sport})\n"
+        output += f"{emoji} [{time_str}] {alert.get('type', 'ALERT')} ({sport_emoji} {sport})\n"
         output += f"   {alert.get('game', 'Unknown')}\n"
         output += f"   {alert.get('movement', 'No details')}\n\n"
 

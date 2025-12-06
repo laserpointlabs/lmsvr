@@ -171,8 +171,8 @@ async def monitor_lines_loop():
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
 
-            # Wait for next interval (5 minutes base loop)
-            await asyncio.sleep(300)
+            # Wait for next interval (15 minutes base loop to save API credits)
+            await asyncio.sleep(900)
 
     except asyncio.CancelledError:
         logger.info("Monitoring task cancelled")
@@ -951,7 +951,7 @@ FOR PROPS/PRIZEPICKS QUESTIONS:
         try:
             result = await handle_openai_chat(
                 request=request,
-                messages=messages_with_system,
+                messages_with_system=messages_with_system,
                 tools=tools,
                 mcp_manager=mcp_manager,
                 openai_chat_completions=openai_chat_completions
