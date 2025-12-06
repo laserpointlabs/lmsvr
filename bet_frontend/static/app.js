@@ -628,13 +628,29 @@ function renderAlerts(alerts) {
         const emoji = significance === 'CRITICAL' ? '🚨' :
                      significance === 'HIGH' ? '🔴' : '🟡';
 
+        // Map sport to emoji
+        const sportEmojis = {
+            "americanfootball_nfl": "🏈",
+            "americanfootball_ncaaf": "🏈",
+            "basketball_nba": "🏀",
+            "basketball_ncaab": "🏀",
+            "baseball_mlb": "⚾",
+            "icehockey_nhl": "🏒",
+            "soccer": "⚽",
+            "tennis": "🎾",
+            "mma": "🥊",
+            "boxing": "🥊",
+            "golf": "⛳"
+        };
+        const sportEmoji = sportEmojis[alert.sport] || '🎮';
+
         // Create prompt for analysis
-        const prompt = `Analyze this line movement: ${alert.game} - ${alert.movement}. Why is this happening? Check news and injuries. Any betting opportunities?`;
+        const prompt = `Analyze this line movement: ${sportEmoji} ${alert.game} - ${alert.movement}. Why is this happening? Check news and injuries. Any betting opportunities?`;
         const safePrompt = prompt.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
         return `
             <div class="alert-item ${alertClass}">
-                <div class="alert-type">${emoji} ${alert.type || 'Alert'}</div>
+                <div class="alert-type">${emoji} ${alert.type || 'Alert'} (${sportEmoji})</div>
                 <div class="alert-game">${alert.game || 'Unknown Game'}</div>
                 <div class="alert-detail">${alert.movement || ''}</div>
                 <div class="alert-time">${timeStr}</div>

@@ -27,6 +27,102 @@ async def list_sports() -> List[str]:
             return [f"Error fetching sports: {str(e)}"]
 
 @mcp.tool()
+async def search_games(query: str) -> str:
+    """
+    Search for a game by team name across ALL major sports.
+    Returns the sport key, game ID, and matchup details.
+    Use this when you don't know the exact sport key or want to find a game by team name.
+    """
+    if not API_KEY:
+        return "ERROR: ODDS_API_KEY not set."
+
+    query = query.lower().strip()
+    if len(query) < 3:
+        return "ERROR: Query too short. Please provide at least 3 characters."
+
+    # Priority sports to check
+    # We check these specific keys because they are the most popular
+    sports_to_check = [
+        "americanfootball_nfl",
+        "americanfootball_ncaaf",
+        "basketball_nba",
+        "basketball_ncaab",
+        "baseball_mlb",
+        "icehockey_nhl"
+    ]
+
+    found_games = []
+
+    async with httpx.AsyncClient() as client:
+        # We can run these in parallel for speed
+        tasks = []
+        for sport in sports_to_check:
+            url = f"{BASE_URL}/{sport}/odds/"
+            params = {
+                "apiKey": API_KEY,
+                "regions": "us",
+                "markets": "h2h", # Light request just to find the game
+                "oddsFormat": "american"
+            }
+            tasks.append(client.get(url, params=params))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for i, result in enumerate(results):
+            sport = sports_to_check[i]
+            if isinstance(result, Exception):
+                continue
+
+            if result.status_code != 200:
+                continue
+
+            data = result.json()
+            if not data: continue
+
+            for game in data:
+                home = game.get('home_team', '').lower()
+                away = game.get('away_team', '').lower()
+
+                # Check for match
+                if query in home or query in away:
+                    # Found a match
+                    found_games.append({
+                        "sport": sport,
+                        "id": game['id'],
+                        "home_team": game['home_team'],
+                        "away_team": game['away_team'],
+                        "commence_time": game['commence_time']
+                    })
+
+    if not found_games:
+        return f"No games found matching '{query}' in major sports (NFL, NCAAF, NBA, NCAAB, MLB, NHL)."
+
+    # Format output
+    output = f"[SEARCH RESULTS for '{query}']\n"
+    output += "=" * 50 + "\n\n"
+
+    for g in found_games:
+        # Determine ESPN sport code for get_injuries
+        espn_sport = "unknown"
+        if "nfl" in g['sport']: espn_sport = "nfl"
+        elif "ncaaf" in g['sport']: espn_sport = "ncaaf"
+        elif "nba" in g['sport']: espn_sport = "nba"
+        elif "ncaab" in g['sport']: espn_sport = "ncaam"
+        elif "mlb" in g['sport']: espn_sport = "mlb"
+
+        output += f"MATCH: {g['away_team']} @ {g['home_team']}\n"
+        output += f"  • Sport Key: {g['sport']}\n"
+        output += f"  • ESPN Sport Code: {espn_sport} (Use for get_injuries)\n"
+        output += f"  • Time: {g['commence_time']}\n"
+        output += f"  • Game ID: {g['id']}\n\n"
+
+    output += "NEXT STEPS:\n"
+    output += "1. Use `get_odds(sport=..., team=...)` with the Sport Key above.\n"
+    output += "2. Use `get_injuries(sport=..., team_name=...)` with the ESPN Sport Code above.\n"
+
+    return output
+
+@mcp.tool()
 async def get_odds(sport: str, team: str, region: str = "us", markets: str = "h2h,spreads,totals") -> str:
     """[LIVE ODDS ONLY] Get current betting lines for a SPECIFIC TEAM's next game. USER MUST ASK ABOUT A SPECIFIC TEAM (e.g. 'Saints odds?', 'Chiefs spread?'). DO NOT use for strategy/concept questions."""
 

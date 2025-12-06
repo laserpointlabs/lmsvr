@@ -782,6 +782,11 @@ AVAILABLE TOOLS
   • Sports: "americanfootball_nfl", "americanfootball_ncaaf", "basketball_nba", "basketball_ncaab", "baseball_mlb"
   • Example: get_odds(sport="basketball_nba", team="Lakers")
 
+**search_games(query)** - Find a game and its sport key
+  • Use for: When you don't know the exact sport or "get_odds" returns nothing
+  • Returns: Sport Key (for get_odds) and ESPN Sport Code (for get_injuries)
+  • Example: search_games(query="Florida St")
+
 **get_team_stats(sport, team_name)** - Team record, standing, next game
   • Use for: Understanding team context, home/away, record
   • Sports: "nfl", "ncaaf", "nba", "ncaam", "mlb"
@@ -912,16 +917,16 @@ FOR "WHAT'S GOOD THIS WEEKEND?" / "BEST BETS?":
 5. Synthesize into TOP 3-5 recommended plays with rationale
 
 FOR "ANALYZE THIS LINE MOVEMENT" / "WHY DID LINE MOVE?":
-1. Call get_odds(sport, team) for current status
-2. Call detect_line_movements() to confirm the move magnitude
-3. Call get_injuries(sport, team) for BOTH teams (often the cause)
-4. Call get_team_stats(sport, team) to check record/standings
-5. Call get_game_weather(home_team) to check wind/snow impact (CRITICAL for Totals & Strategy)
-6. Call search_guides("line movement analysis") for general theory if needed
+1. Call search_games(query="[Team Name]") to find the correct sport and game details
+2. Call get_odds(sport, team) using the Sport Key found
+3. Call detect_line_movements(sport) to confirm the move magnitude
+4. Call get_injuries(sport, team) using the ESPN Sport Code found
+5. Call get_team_stats(sport, team) to check record/standings
+6. Call get_game_weather(home_team) to check wind/snow impact (CRITICAL for Totals & Strategy)
 7. EXPLAIN the move in the final response (Injury? Sharp money? Weather?)
 
 FOR SPECIFIC GAME QUESTIONS ("What should I bet on Chiefs?"):
-1. Call get_odds() for live lines
+1. Call get_odds() for live lines (or search_games() if unsure of sport)
 2. Call get_team_stats() for both teams
 3. Call get_injuries() for both teams
 4. Call get_game_weather(home_team) for outdoor games

@@ -28,9 +28,19 @@ def find_team_id(teams: List[Dict], query: str) -> Optional[Dict]:
         "ole miss": "mississippi",
         "southern cal": "usc",
         "nc state": "north carolina state",
+        "fla state": "florida state",
+        "fla": "florida",
     }
     if query in mappings:
         query = mappings[query]
+
+    # Normalize St. -> State
+    query = query.replace(" st.", " state").replace(" st ", " state ")
+    if query.endswith(" st"):
+        query = query[:-3] + " state"
+
+    # Tokenize query for fuzzy matching
+    query_tokens = set(query.split())
 
     for t in teams:
         team = t.get("team", {})
@@ -40,12 +50,24 @@ def find_team_id(teams: List[Dict], query: str) -> Optional[Dict]:
         location = team.get("location", "").lower()
         abbr = team.get("abbreviation", "").lower()
 
+        # 1. Exact/Substring Matches (High Priority)
         if (query == display_name or
             query == short_name or
             query == nickname or
             query == abbr or
             query in display_name or
             display_name in query):
+            return team
+
+        # 2. Token overlap (Lower Priority)
+        # Check if all query tokens are in the display name
+        display_tokens = set(display_name.replace("-", " ").split())
+
+        # Calculate overlap
+        intersection = query_tokens.intersection(display_tokens)
+
+        # If all query tokens are found in display name (e.g. "Florida Seminoles" in "Florida State Seminoles")
+        if len(intersection) == len(query_tokens) and len(query_tokens) > 0:
             return team
 
     return None
