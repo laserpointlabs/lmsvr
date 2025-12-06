@@ -75,7 +75,7 @@ import asyncio
 async def monitor_lines_loop():
     """
     Background task to monitor line movements periodically.
-    Runs every 15 minutes (900 seconds).
+    Runs every 5 minutes (base interval), but prop checks are configurable.
     """
     logger.info("Starting background monitoring task...")
 
@@ -95,15 +95,19 @@ async def monitor_lines_loop():
     except Exception as e:
         logger.error(f"Failed to refresh tools: {e}")
 
-    loop_count = 0
+    import time
+    last_prop_check = 0
+
     try:
         while True:
-            loop_count += 1
+            # Reload config every loop to allow dynamic changes without restart
+            prop_interval = int(os.getenv("PROP_CHECK_INTERVAL", 15))
+
             try:
-                logger.info(f"Running scheduled check (Cycle {loop_count})...")
+                logger.info(f"Running scheduled check (Prop Interval: {prop_interval}m)...")
 
                 for sport in sports_to_monitor:
-                    # ... existing line checks ...
+                    logger.info(f"Checking {sport}...")
 
                     # 1. Check if we have opening lines (baseline) for this sport
                     from pathlib import Path
@@ -132,8 +136,8 @@ async def monitor_lines_loop():
                     # 3. Check for steam moves (last 30 min)
                     await mcp_manager.execute_tool("detect_steam_moves", {"sport": sport})
 
-                    # 4. Check Props (Every 30 mins / 6th cycle)
-                    if loop_count % 6 == 0:
+                    # 4. Check Props (Based on Interval)
+                    if time.time() - last_prop_check > (prop_interval * 60):
                         logger.info(f"Running Prop Check for {sport}...")
                         # Initialize baseline if needed
                         opening_props_file = Path("/mcp_servers/betting_monitor/data/opening_props.json")
@@ -154,6 +158,10 @@ async def monitor_lines_loop():
                             result = await mcp_manager.execute_tool("compare_props", {"sport": sport})
                             logger.info(f"Prop check ({sport}): {result}")
 
+                # Update timestamp if we ran props
+                if time.time() - last_prop_check > (prop_interval * 60):
+                    last_prop_check = time.time()
+
                 # 5. Force cleanup of old alerts
                 await mcp_manager.execute_tool("get_recent_alerts", {"limit": 1})
                 logger.info("Alert cleanup routine executed.")
@@ -163,7 +171,7 @@ async def monitor_lines_loop():
             except Exception as e:
                 logger.error(f"Error in monitoring loop: {e}")
 
-            # Wait for next interval (5 minutes)
+            # Wait for next interval (5 minutes base loop)
             await asyncio.sleep(300)
 
     except asyncio.CancelledError:
@@ -761,7 +769,7 @@ YOUR MISSION: SYNTHESIZE ALL DATA INTO ACTIONABLE RECOMMENDATIONS
 
 When a user asks about betting on a game, you should:
 1. Get LIVE ODDS (get_odds)
-2. Get TEAM STATS & INJURIES (get_nfl_team_stats, get_nfl_injuries)
+2. Get TEAM STATS & INJURIES (get_team_stats, get_injuries)
 3. Apply STRATEGY KNOWLEDGE (search_guides)
 4. Provide a COMPREHENSIVE ANALYSIS with specific bet recommendations
 
@@ -908,7 +916,7 @@ FOR "ANALYZE THIS LINE MOVEMENT" / "WHY DID LINE MOVE?":
 2. Call detect_line_movements() to confirm the move magnitude
 3. Call get_injuries(sport, team) for BOTH teams (often the cause)
 4. Call get_team_stats(sport, team) to check record/standings
-5. Call get_game_weather(home_team) for outdoor games
+5. Call get_game_weather(home_team) to check wind/snow impact (CRITICAL for Totals & Strategy)
 6. Call search_guides("line movement analysis") for general theory if needed
 7. EXPLAIN the move in the final response (Injury? Sharp money? Weather?)
 
@@ -943,7 +951,7 @@ FOR PROPS/PRIZEPICKS QUESTIONS:
         try:
             result = await handle_openai_chat(
                 request=request,
-                messages_with_system=messages_with_system,
+                messages=messages_with_system,
                 tools=tools,
                 mcp_manager=mcp_manager,
                 openai_chat_completions=openai_chat_completions
