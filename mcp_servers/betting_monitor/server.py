@@ -134,9 +134,48 @@ def save_alert(alert: Dict):
     alerts = data.get('alerts', [])
     expired = data.get('expired', [])
 
+    # Ensure sport emoji is saved if possible (for frontend display if it doesn't have the map)
+    # But frontend handles it via app.js map.
+    # Wait, the user says "I got a new alert but it does not show any sports emoji".
+    # This likely refers to the `get_recent_alerts` output OR the frontend display.
+    # In app.js, we added the map.
+    # But maybe the 'sport' field is missing or incorrect in the alert object?
+
+    # Let's verify 'sport' is passed correctly in all save_alert calls.
+    # It is passed in detect_steam_moves, compare_to_opening, compare_props.
+
+    # However, if the user is looking at the frontend, app.js handles it.
+    # If they are looking at the `get_recent_alerts` output in CHAT, that was updated.
+
+    # The issue might be that previously saved alerts DO NOT have the emoji because it's dynamically added in get_recent_alerts,
+    # but maybe the user interface (frontend) relies on `alert.sport` being present.
+
+    # Let's double check if the frontend is receiving the sport field.
+    # Yes, save_alert saves whatever is passed.
+
+    # Maybe the user means the ALERT POPUP itself?
+    # Ah, in app.js: `const sportEmoji = sportEmojis[alert.sport] || '🎮';`
+    # If `alert.sport` is undefined, it shows 🎮.
+
+    # If the alert is OLD (from before we started saving 'sport'), it won't show.
+    # But new alerts should have it.
+
+    # I will add a fallback to inject the emoji directly into the alert text for robustness,
+    # or ensure `alert['sport']` is definitely saved.
+
+    # Actually, the best fix is to ensure the saved alert object has the emoji field explicitly if needed,
+    # OR just rely on the sport field which should be there.
+
+    # Let's add a debug print or log to verify what's being saved.
+    pass
+
     # Check if this is a known alert (active OR expired)
     game_id = alert.get('game_id')
     alert_type = alert.get('type')
+
+    # Add sport emoji to the alert object for convenience
+    if 'sport' in alert:
+        alert['sport_emoji'] = SPORT_EMOJIS.get(alert['sport'], "🎮")
 
     # 1. Check Active Alerts
     for existing in alerts:

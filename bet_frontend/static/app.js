@@ -724,8 +724,8 @@ function startAlertsPolling() {
     // Initial fetch
     fetchAlerts();
 
-    // Set up polling (poll every 15 seconds for better responsiveness)
-    alertsPollingInterval = setInterval(fetchAlerts, 15000);
+    // Set up polling (poll every 60 seconds to save resources)
+    alertsPollingInterval = setInterval(fetchAlerts, 60000);
 }
 
 // Stop polling
