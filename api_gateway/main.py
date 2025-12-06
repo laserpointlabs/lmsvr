@@ -956,7 +956,7 @@ FOR PROPS/PRIZEPICKS QUESTIONS:
         try:
             result = await handle_openai_chat(
                 request=request,
-                messages=messages_with_system,
+                messages_with_system=messages_with_system,
                 tools=tools,
                 mcp_manager=mcp_manager,
                 openai_chat_completions=openai_chat_completions
