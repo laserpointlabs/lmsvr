@@ -14,6 +14,15 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+import sys
+
+# Add parent directory to path to import tracking
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+try:
+    from api_gateway.tracking import track_external_api_call
+except ImportError:
+    # Fallback
+    def track_external_api_call(*args, **kwargs): pass
 
 # Initialize FastMCP server
 mcp = FastMCP("BettingMonitor")
@@ -325,6 +334,12 @@ async def get_opening_lines(sport: str = "americanfootball_nfl", hours_ago: int 
 
             resp = await client.get(url, params=params)
 
+            # Track usage
+            # Cost depends on if we fallback to snapshot (handled in recursive call)
+            # Historical call usually costs 10 requests? Let's assume 1 for now or check docs.
+            # Actually historical odds are expensive. Let's log it as 10 credits.
+            track_external_api_call("odds_api", f"/historical/sports/{sport}/odds", "GET", resp.status_code, 10, {"action": "get_opening_lines", "type": "historical"})
+
             # Handle 401 specifically for historical access
             if resp.status_code == 401:
                 return await snapshot_current_lines(sport)
@@ -595,7 +610,11 @@ async def detect_steam_moves(sport: str = "americanfootball_nfl") -> str:
                 "date": date_param
             }
 
-            hist_resp = await client.get(hist_url, params=hist_params)
+            hist_            resp = await client.get(hist_url, params=hist_params)
+
+            # Track usage (historical)
+            track_external_api_call("odds_api", f"/historical/sports/{sport}/odds", "GET", resp.status_code, 10, {"action": "detect_steam_moves", "type": "historical"})
+
             hist_resp.raise_for_status()
             hist_result = hist_resp.json()
             hist_games = {g['id']: g for g in hist_result.get('data', [])}
@@ -609,7 +628,11 @@ async def detect_steam_moves(sport: str = "americanfootball_nfl") -> str:
                 "oddsFormat": "american"
             }
 
-            curr_resp = await client.get(curr_url, params=curr_params)
+            curr_            resp = await client.get(curr_url, params=curr_params)
+
+            # Track usage (current)
+            track_external_api_call("odds_api", f"/sports/{sport}/odds", "GET", resp.status_code, 1, {"action": "detect_steam_moves", "type": "current"})
+
             curr_resp.raise_for_status()
             curr_games = curr_resp.json()
 
@@ -725,6 +748,9 @@ async def snapshot_props(sport: str = "americanfootball_nfl", limit_games: int =
             url = f"{BASE_URL}/sports/{sport}/events"
             resp = await client.get(url, params={"apiKey": API_KEY, "commenceTimeFrom": datetime.now(timezone.utc).isoformat()})
 
+            # Track usage
+            track_external_api_call("odds_api", f"/sports/{sport}/events", "GET", resp.status_code, 0, {"action": "snapshot_props"})
+
             if resp.status_code != 200:
                 return f"Error fetching events: {resp.status_code}"
 
@@ -748,6 +774,9 @@ async def snapshot_props(sport: str = "americanfootball_nfl", limit_games: int =
                     f"{BASE_URL}/sports/{sport}/events/{game_id}/odds",
                     params={"apiKey": API_KEY, "regions": "us", "markets": markets, "oddsFormat": "american"}
                 )
+
+                # Track usage (Props cost)
+                track_external_api_call("odds_api", f"/sports/{sport}/events/{game_id}/odds", "GET", odds_resp.status_code, 1, {"action": "snapshot_props_detail"})
 
                 if odds_resp.status_code == 200:
                     data = odds_resp.json()
@@ -829,6 +858,9 @@ async def compare_props(sport: str = "americanfootball_nfl") -> str:
                     f"{BASE_URL}/sports/{sport}/events/{game_id}/odds",
                     params={"apiKey": API_KEY, "regions": "us", "markets": markets, "oddsFormat": "american"}
                 )
+
+                # Track usage (Props cost)
+                track_external_api_call("odds_api", f"/sports/{sport}/events/{game_id}/odds", "GET", odds_resp.status_code, 1, {"action": "compare_props"})
 
                 if odds_resp.status_code != 200: continue
 

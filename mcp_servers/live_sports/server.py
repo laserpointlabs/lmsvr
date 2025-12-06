@@ -3,6 +3,15 @@ import httpx
 import os
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
+import sys
+
+# Add parent directory to path to import tracking
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+try:
+    from api_gateway.tracking import track_external_api_call
+except ImportError:
+    # Fallback if not running in full environment
+    def track_external_api_call(*args, **kwargs): pass
 
 # Initialize FastMCP server
 mcp = FastMCP("LiveSportsData")
@@ -20,6 +29,10 @@ async def list_sports() -> List[str]:
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(f"{BASE_URL}/?apiKey={API_KEY}")
+
+            # Track usage
+            track_external_api_call("odds_api", "/sports", "GET", resp.status_code, 0, {"action": "list_sports"})
+
             resp.raise_for_status()
             data = resp.json()
             return [sport["key"] for sport in data]
@@ -71,7 +84,11 @@ async def search_games(query: str) -> str:
         for i, result in enumerate(results):
             sport = sports_to_check[i]
             if isinstance(result, Exception):
+                track_external_api_call("odds_api", f"/sports/{sport}/odds", "GET", 500, 0, {"error": str(result), "action": "search_games"})
                 continue
+
+            # Track usage (light request cost = 0 usually, but counts as call)
+            track_external_api_call("odds_api", f"/sports/{sport}/odds", "GET", result.status_code, 0, {"action": "search_games"})
 
             if result.status_code != 200:
                 continue
@@ -147,6 +164,11 @@ async def get_odds(sport: str, team: str, region: str = "us", markets: str = "h2
             }
 
             resp = await client.get(url, params=params)
+
+            # Track usage
+            # Cost calculation: 1 request
+            track_external_api_call("odds_api", f"/{sport}/odds", "GET", resp.status_code, 1, {"action": "get_odds", "markets": markets})
+
             resp.raise_for_status()
             data = resp.json()
 
@@ -242,6 +264,10 @@ async def get_weekend_slate(sport: str = "americanfootball_nfl", region: str = "
             }
 
             resp = await client.get(url, params=params)
+
+            # Track usage
+            track_external_api_call("odds_api", f"/{sport}/odds", "GET", resp.status_code, 1, {"action": "get_weekend_slate"})
+
             resp.raise_for_status()
             data = resp.json()
 
@@ -348,6 +374,10 @@ async def get_value_finder(sport: str = "americanfootball_nfl") -> str:
             }
 
             resp = await client.get(url, params=params)
+
+            # Track usage
+            track_external_api_call("odds_api", f"/{sport}/odds", "GET", resp.status_code, 1, {"action": "get_value_finder"})
+
             resp.raise_for_status()
             data = resp.json()
 
@@ -432,6 +462,10 @@ async def find_teaser_candidates(sport: str = "americanfootball_nfl") -> str:
             }
 
             resp = await client.get(url, params=params)
+
+            # Track usage
+            track_external_api_call("odds_api", f"/{sport}/odds", "GET", resp.status_code, 1, {"action": "find_teaser_candidates"})
+
             resp.raise_for_status()
             data = resp.json()
 
@@ -532,6 +566,10 @@ async def get_player_props(sport: str, game_id: str, markets: str) -> str:
             }
 
             resp = await client.get(url, params=params)
+
+            # Track usage
+            track_external_api_call("odds_api", f"/{sport}/events/{game_id}/odds", "GET", resp.status_code, 1, {"action": "get_player_props"})
+
             resp.raise_for_status()
             data = resp.json()
 

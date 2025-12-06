@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>External API Usage</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f4f4f4; }
+        .metric { display: inline-block; margin: 10px; padding: 20px; background: #eef; border-radius: 8px; }
+        .value { font-size: 2em; font-weight: bold; }
+        #auth-section { margin-bottom: 20px; padding: 15px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px; display: none; }
+        input[type="text"] { padding: 8px; width: 300px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>External API Monitor (Odds API)</h1>
+
+    <div id="auth-section">
+        <p><strong>Authentication Required:</strong> No API Key found.</p>
+        <input type="text" id="api-key-input" placeholder="Enter your sk_... API Key">
+        <button onclick="saveKey()">Save & Load</button>
+    </div>
+
+    <div id="metrics">
+        <div class="metric">
+            <div>Total Requests (24h)</div>
+            <div class="value" id="total-req">0</div>
+        </div>
+        <div class="metric">
+            <div>Total Credits (24h)</div>
+            <div class="value" id="total-cost">0</div>
+        </div>
+    </div>
+
+    <h2>Recent Activity</h2>
+    <table id="logs-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Service</th>
+                <th>Endpoint</th>
+                <th>Cost</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Logs here -->
+        </tbody>
+    </table>
+
+    <script>
+        function getApiKey() {
+            // 1. Check URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            const keyFromUrl = urlParams.get('key');
+            if (keyFromUrl) {
+                localStorage.setItem('api_key', keyFromUrl);
+                return keyFromUrl;
+            }
+
+            // 2. Check LocalStorage
+            return localStorage.getItem('api_key');
+        }
+
+        function saveKey() {
+            const key = document.getElementById('api-key-input').value.trim();
+            if (key) {
+                localStorage.setItem('api_key', key);
+                document.getElementById('auth-section').style.display = 'none';
+                fetchStats();
+            }
+        }
+
+        async function fetchStats() {
+            const apiKey = getApiKey();
+
+            if (!apiKey) {
+                document.getElementById('auth-section').style.display = 'block';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/usage/external?days=1', {
+                    headers: { 'Authorization': 'Bearer ' + apiKey }
+                });
+
+                if (resp.status === 401) {
+                    document.getElementById('auth-section').style.display = 'block';
+                    document.querySelector('#auth-section p').innerHTML = '<strong>Error:</strong> Invalid API Key. Please enter a valid one.';
+                    localStorage.removeItem('api_key');
+                    return;
+                }
+
+                const data = await resp.json();
+
+                document.getElementById('total-req').textContent = data.total_requests;
+                document.getElementById('total-cost').textContent = data.total_credits;
+
+                const tbody = document.querySelector('#logs-table tbody');
+                tbody.innerHTML = '';
+
+                data.recent_logs.forEach(log => {
+                    const row = document.createElement('tr');
+                    const date = new Date(log.timestamp + 'Z'); // Ensure treated as UTC
+                    row.innerHTML = `
+                        <td>${date.toLocaleString()}</td>
+                        <td>${log.service}</td>
+                        <td>${log.endpoint}</td>
+                        <td>${log.cost}</td>
+                        <td>${log.status}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        fetchStats();
+        setInterval(fetchStats, 30000);
+    </script>
+</body>
+</html>

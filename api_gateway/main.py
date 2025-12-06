@@ -229,6 +229,75 @@ async def log_requests(request: Request, call_next):
 
 
 # Health check endpoints
+@app.get("/api/usage/external")
+async def get_external_api_usage(
+    days: int = 1,
+    service: Optional[str] = None,
+    customer_data: tuple = Depends(get_current_customer),
+    db: Session = Depends(get_db_session)
+):
+    """Get external API usage stats."""
+    from api_gateway.database import ExternalAPIUsage
+    from sqlalchemy import func
+
+    # Calculate cutoff
+    cutoff = datetime.utcnow() - timedelta(days=days)
+
+    query = db.query(ExternalAPIUsage).filter(ExternalAPIUsage.timestamp >= cutoff)
+
+    if service:
+        query = query.filter(ExternalAPIUsage.service_name == service)
+
+    logs = query.order_by(ExternalAPIUsage.timestamp.desc()).all()
+
+    # Aggregate by hour
+    stats = {}
+    total_cost = 0
+    total_requests = 0
+
+    for log in logs:
+        hour_key = log.timestamp.strftime("%Y-%m-%d %H:00")
+        if hour_key not in stats:
+            stats[hour_key] = {"requests": 0, "cost": 0}
+
+        stats[hour_key]["requests"] += 1
+        stats[hour_key]["cost"] += log.cost_credits
+        total_cost += log.cost_credits
+        total_requests += 1
+
+    return {
+        "period_days": days,
+        "total_requests": total_requests,
+        "total_credits": total_cost,
+        "by_hour": stats,
+        "recent_logs": [
+            {
+                "timestamp": l.timestamp,
+                "service": l.service_name,
+                "endpoint": l.endpoint,
+                "cost": l.cost_credits,
+                "status": l.status_code
+            } for l in logs[:50]
+        ]
+    }
+
+
+@app.get("/usage/monitor", response_class=HTMLResponse)
+async def usage_monitor_page():
+    """Serve the usage monitor page."""
+    # When running in container, /app is the workdir.
+    # The file is at /app/monitor.html because api_gateway folder contents are copied to /app in Dockerfile
+    try:
+        with open("monitor.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        # Fallback if running locally where it might be api_gateway/monitor.html
+        try:
+            with open("api_gateway/monitor.html", "r") as f:
+                return HTMLResponse(content=f.read())
+        except FileNotFoundError:
+             return HTMLResponse(content="<h1>Error: monitor.html not found</h1>", status_code=500)
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint with current timestamp."""

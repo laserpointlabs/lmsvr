@@ -12,28 +12,28 @@ Base = declarative_base()
 
 class Customer(Base):
     __tablename__ = "customers"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     active = Column(Boolean, default=True)
     monthly_budget = Column(Float, nullable=True)
-    
+
     api_keys = relationship("APIKey", back_populates="customer", cascade="all, delete-orphan")
     usage_logs = relationship("UsageLog", back_populates="customer")
 
 
 class APIKey(Base):
     __tablename__ = "api_keys"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     key_hash = Column(String, unique=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)
     active = Column(Boolean, default=True)
-    
+
     customer = relationship("Customer", back_populates="api_keys")
     usage_logs = relationship("UsageLog", back_populates="api_key")
     device_registrations = relationship("DeviceRegistration", back_populates="api_key", cascade="all, delete-orphan")
@@ -41,7 +41,7 @@ class APIKey(Base):
 
 class UsageLog(Base):
     __tablename__ = "usage_logs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     api_key_id = Column(Integer, ForeignKey("api_keys.id"), nullable=False)
@@ -51,14 +51,14 @@ class UsageLog(Base):
     cost = Column(Float, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     extra_data = Column(Text, nullable=True)  # JSON string for additional data (renamed from metadata to avoid SQLAlchemy conflict)
-    
+
     customer = relationship("Customer", back_populates="usage_logs")
     api_key = relationship("APIKey", back_populates="usage_logs")
 
 
 class PricingConfig(Base):
     __tablename__ = "pricing_config"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     model_name = Column(String, nullable=False, unique=True, index=True)
     per_request_cost = Column(Float, default=0.0)
@@ -70,7 +70,7 @@ class PricingConfig(Base):
 
 class ModelMetadata(Base):
     __tablename__ = "model_metadata"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     model_name = Column(String, unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)
@@ -85,7 +85,7 @@ class DeviceRegistration(Base):
     and stored here. The device can then authenticate using just the token.
     """
     __tablename__ = "device_registrations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     device_token = Column(String, unique=True, nullable=False, index=True)
     api_key_id = Column(Integer, ForeignKey("api_keys.id"), nullable=False)
@@ -94,8 +94,24 @@ class DeviceRegistration(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     last_used = Column(DateTime, default=datetime.utcnow)
     active = Column(Boolean, default=True)
-    
+
     api_key = relationship("APIKey", back_populates="device_registrations")
+
+
+class ExternalAPIUsage(Base):
+    """
+    Track external API calls (e.g. Odds API, ESPN).
+    """
+    __tablename__ = "external_api_usage"
+
+    id = Column(Integer, primary_key=True, index=True)
+    service_name = Column(String, nullable=False, index=True) # "odds_api", "espn", "open_meteo"
+    endpoint = Column(String, nullable=False) # e.g. "/sports/nfl/odds"
+    method = Column(String, default="GET")
+    status_code = Column(Integer, nullable=True)
+    cost_credits = Column(Integer, default=0) # For Odds API credits
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    metadata_json = Column(Text, nullable=True) # Additional context
 
 
 # Database setup
@@ -147,9 +163,9 @@ def init_db():
                 os.chmod(db_dir, 0o777)  # Allow container user to write
             except (OSError, PermissionError):
                 pass
-    
+
     Base.metadata.create_all(bind=engine)
-    
+
     # Ensure database file has correct permissions (if SQLite)
     if database_url.startswith("sqlite"):
         db_path = database_url.replace("sqlite:///", "").replace("sqlite:////", "/")
@@ -175,4 +191,3 @@ def get_db_session():
 def get_db_session_sync():
     """Get database session synchronously (for CLI scripts)."""
     return SessionLocal()
-
